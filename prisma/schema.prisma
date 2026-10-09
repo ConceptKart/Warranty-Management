@@ -1,0 +1,327 @@
+// Prisma schema for Concept Kart Warranty Management (Next.js migration)
+// Grounded in live dump: u590978274_warmanagement (1).sql
+// No Prisma relations yet — live DB has no foreign keys. Use joins in queries.
+// After local MySQL import, refine with: npx prisma db pull
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Admin ───────────────────────────────────────────────
+
+model AdminUser {
+  userId       Int       @id @default(autoincrement()) @map("user_id")
+  username     String    @unique @db.VarChar(50)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(100)
+  email        String?   @default("") @db.VarChar(100)
+  role         String    @default("support") @db.VarChar(20)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+  lastLogin    DateTime? @map("last_login")
+
+  @@map("admin_users")
+}
+
+// ─── Core CRM ────────────────────────────────────────────
+
+model Customer {
+  customerId           Int       @id @default(autoincrement()) @map("customer_id")
+  baselinkerCustomerId String?   @map("baselinker_customer_id") @db.VarChar(50)
+  email                String    @db.VarChar(255)
+  firstName            String?   @map("first_name") @db.VarChar(100)
+  lastName             String?   @map("last_name") @db.VarChar(100)
+  phone                String?   @db.VarChar(20)
+  address              String?   @db.Text
+  createdAt            DateTime? @default(now()) @map("created_at")
+  updatedAt            DateTime? @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+model Product {
+  productId             Int       @id @default(autoincrement()) @map("product_id")
+  baselinkerProductId   String?   @map("baselinker_product_id") @db.VarChar(50)
+  productName           String    @map("product_name") @db.VarChar(255)
+  productSku            String?   @map("product_sku") @db.VarChar(100)
+  category              String?   @db.VarChar(100)
+  warrantyPeriodMonths  Decimal?  @default(12.00) @map("warranty_period_months") @db.Decimal(4, 2)
+  replacementPeriodDays Decimal?  @default(10.00) @map("replacement_period_days") @db.Decimal(4, 2)
+  isElectronic          Boolean?  @default(true) @map("is_electronic")
+  createdAt             DateTime? @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+  ean                   String?   @db.VarChar(50)
+
+  @@map("products")
+}
+
+model Order {
+  orderId            Int       @id @default(autoincrement()) @map("order_id")
+  baselinkerOrderId  String    @map("baselinker_order_id") @db.VarChar(50)
+  orderNumber        String?   @map("order_number") @db.VarChar(100)
+  customerId         Int       @map("customer_id")
+  sourcePlatform     String?   @map("source_platform") @db.VarChar(50)
+  orderValue         Decimal?  @map("order_value") @db.Decimal(10, 2)
+  orderStatus        String?   @map("order_status") @db.VarChar(50)
+  orderDate          DateTime  @map("order_date")
+  deliveryDate       DateTime? @map("delivery_date")
+  warrantyStartDate  DateTime? @map("warranty_start_date")
+  warrantyEndDate    DateTime? @map("warranty_end_date")
+  replacementEndDate DateTime? @map("replacement_end_date")
+  createdAt          DateTime? @default(now()) @map("created_at")
+  updatedAt          DateTime? @updatedAt @map("updated_at")
+  originalOrderId    String?   @map("original_order_id") @db.VarChar(50)
+  isClonedOrder      Boolean?  @default(false) @map("is_cloned_order")
+  cloneReason        String?   @map("clone_reason") @db.VarChar(255)
+  ticketNumber       String?   @map("ticket_number") @db.VarChar(20)
+
+  @@map("orders")
+}
+
+model OrderProduct {
+  orderProductId Int       @id @default(autoincrement()) @map("order_product_id")
+  orderId        Int       @map("order_id")
+  productId      Int       @map("product_id")
+  quantity       Int       @default(1)
+  unitPrice      Decimal?  @map("unit_price") @db.Decimal(10, 2)
+  totalPrice     Decimal?  @map("total_price") @db.Decimal(10, 2)
+  createdAt      DateTime? @default(now()) @map("created_at")
+
+  @@map("order_products")
+}
+
+// ─── Lookups ─────────────────────────────────────────────
+
+model TicketType {
+  ticketTypeId Int      @id @default(autoincrement()) @map("ticket_type_id")
+  typeName     String   @map("type_name") @db.VarChar(50)
+  typeCode     String   @map("type_code") @db.VarChar(20)
+  description  String?  @db.Text
+  isActive     Boolean? @default(true) @map("is_active")
+
+  @@map("ticket_types")
+}
+
+model TicketStatus {
+  statusId     Int       @id @default(autoincrement()) @map("status_id")
+  statusName   String    @map("status_name") @db.VarChar(100)
+  statusCode   String    @map("status_code") @db.VarChar(50)
+  ticketTypeId Int       @map("ticket_type_id")
+  sortOrder    Int       @map("sort_order")
+  isFinal      Boolean?  @default(false) @map("is_final")
+  isActive     Boolean?  @default(true) @map("is_active")
+  statusColor  String?   @default("#007bff") @map("status_color") @db.VarChar(7)
+  createdAt    DateTime? @default(now()) @map("created_at")
+
+  @@map("ticket_statuses")
+}
+
+model IssueType {
+  issueTypeId Int       @id @default(autoincrement()) @map("issue_type_id")
+  issueName   String    @map("issue_name") @db.VarChar(100)
+  issueCode   String    @map("issue_code") @db.VarChar(50)
+  description String?   @db.Text
+  isActive    Boolean?  @default(true) @map("is_active")
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  @@map("issue_types")
+}
+
+// ─── Tickets ─────────────────────────────────────────────
+
+model WarrantyTicket {
+  ticketId              Int       @id @default(autoincrement()) @map("ticket_id")
+  ticketNumber          String    @unique @map("ticket_number") @db.VarChar(20)
+  orderId               Int       @map("order_id")
+  claimNumber           String?   @map("claim_number") @db.VarChar(100)
+  productId             Int       @map("product_id")
+  selectedProductsJson  String?   @map("selected_products_json") @db.Text
+  productQuantity       Int       @default(1) @map("product_quantity")
+  ticketTypeId          Int       @map("ticket_type_id")
+  issueTypeId           Int       @map("issue_type_id")
+  statusId              Int       @map("status_id")
+  customerDescription   String    @map("customer_description") @db.Text
+  internalNotes         String?   @map("internal_notes") @db.Text
+  resolutionDetails     String?   @map("resolution_details") @db.Text
+  ticketDate            DateTime? @default(now()) @map("ticket_date")
+  resolutionDate        DateTime? @map("resolution_date")
+  priority              String    @default("medium") @db.VarChar(20)
+  assignedTo            String?   @map("assigned_to") @db.VarChar(100)
+  trackingNumber        String?   @map("tracking_number") @db.VarChar(100)
+  awbNumber             String?   @map("awb_number") @db.VarChar(100)
+  reverseAwbNumber      String?   @map("reverse_awb_number") @db.VarChar(100)
+  courierPartner        String?   @map("courier_partner") @db.VarChar(100)
+  shipmentStatus        String?   @default("pending") @map("shipment_status") @db.VarChar(50)
+  createdAt             DateTime? @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+  baselinkerIntegrated  Boolean?  @default(false) @map("baselinker_integrated")
+  clonedFromOrderId     Int?      @map("cloned_from_order_id")
+  replacementEan        String?   @map("replacement_ean") @db.VarChar(100)
+  replacementProductId  Int?      @map("replacement_product_id")
+  replacementVariantId  Int?      @map("replacement_variant_id")
+  replacementWarehouseId Int?     @map("replacement_warehouse_id")
+  replacementLocation   String?   @map("replacement_location") @db.VarChar(100)
+  sourceDevice          String?   @map("source_device") @db.VarChar(255)
+
+  @@map("warranty_tickets")
+}
+
+model TicketAttachment {
+  attachmentId     Int       @id @default(autoincrement()) @map("attachment_id")
+  ticketId         Int       @map("ticket_id")
+  originalFilename String    @map("original_filename") @db.VarChar(255)
+  storedFilename   String    @map("stored_filename") @db.VarChar(255)
+  filePath         String    @map("file_path") @db.VarChar(500)
+  remoteUrl        String?   @map("remote_url") @db.VarChar(500)
+  fileType         String    @map("file_type") @db.VarChar(50)
+  fileSize         Int       @map("file_size")
+  isCompressed     Boolean?  @default(false) @map("is_compressed")
+  uploadedBy       String    @map("uploaded_by") @db.VarChar(100)
+  createdAt        DateTime? @default(now()) @map("created_at")
+
+  @@map("ticket_attachments")
+}
+
+model TicketComment {
+  commentId   Int       @id @default(autoincrement()) @map("comment_id")
+  ticketId    Int       @map("ticket_id")
+  commentType String    @map("comment_type") @db.VarChar(20)
+  commentText String    @map("comment_text") @db.Text
+  authorName  String    @map("author_name") @db.VarChar(100)
+  authorEmail String?   @map("author_email") @db.VarChar(255)
+  isInternal  Boolean?  @default(false) @map("is_internal")
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  @@map("ticket_comments")
+}
+
+model TicketStatusHistory {
+  historyId    Int       @id @default(autoincrement()) @map("history_id")
+  ticketId     Int       @map("ticket_id")
+  oldStatusId  Int?      @map("old_status_id")
+  newStatusId  Int       @map("new_status_id")
+  changedBy    String    @map("changed_by") @db.VarChar(100)
+  changeReason String?   @map("change_reason") @db.Text
+  changedAt    DateTime? @default(now()) @map("changed_at")
+
+  @@map("ticket_status_history")
+}
+
+model TicketEmailLog {
+  logId          Int      @id @default(autoincrement()) @map("log_id") @db.UnsignedInt
+  ticketId       Int?     @map("ticket_id") @db.UnsignedInt
+  recipientEmail String   @map("recipient_email") @db.VarChar(255)
+  subject        String   @db.VarChar(500)
+  statusCode     String   @default("") @map("status_code") @db.VarChar(80)
+  sent           Boolean  @default(false)
+  errorMessage   String?  @map("error_message") @db.Text
+  bodyHtml       String?  @map("body_html") @db.MediumText
+  sentAt         DateTime @map("sent_at")
+
+  @@map("ticket_email_log")
+}
+
+// ─── Marketplace mirrors ─────────────────────────────────
+
+model ShopifyOrder {
+  id             BigInt   @id @default(autoincrement())
+  baseOrderId    String   @map("base_order_id") @db.VarChar(100)
+  orderDate      DateTime @map("order_date")
+  shopifyOrderId String   @map("shopify_order_id") @db.VarChar(100)
+  productId      BigInt   @map("product_id")
+  variantId      BigInt   @map("variant_id")
+  sku            String?  @db.VarChar(100)
+  awbNumber      String?  @map("awb_number") @db.VarChar(150)
+  customerName   String   @map("customer_name") @db.VarChar(150)
+  phoneNumber    String?  @map("phone_number") @db.VarChar(20)
+  email          String?  @db.VarChar(150)
+  customerAddress String  @map("customer_address") @db.Text
+  city           String   @db.VarChar(100)
+  state          String   @db.VarChar(100)
+  pincode        String   @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  qty            Int      @default(1)
+  ean            Int?
+
+  @@map("shopify_orders")
+}
+
+model AmazonOrderDetail {
+  id                Int       @id @default(autoincrement())
+  amazonOrderId     String?   @map("amazon_order_id") @db.VarChar(50)
+  sku               String?   @db.VarChar(100)
+  amazonTitle       String?   @map("amazon_title") @db.VarChar(255)
+  orderDate         DateTime  @map("order_date")
+  productId         Int?      @map("product_id")
+  variantId         Int?      @map("variant_id")
+  baseLinkerOrderId Int?      @map("base_linker_order_id")
+  ean               String?   @db.VarChar(50)
+
+  @@map("amazon_order_details")
+}
+
+// Hostinger api_* tables (also used via raw SQL in src/lib/crud)
+
+model CategoryIssue {
+  id                    Int       @id @default(autoincrement())
+  category              String    @db.VarChar(150)
+  issueName             String    @map("issue_name") @db.VarChar(255)
+  troubleshootingSteps  String    @map("troubleshooting_steps") @db.Text
+  createdAt             DateTime? @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+
+  @@map("category_issues")
+}
+
+model BlProduct {
+  id            BigInt    @id @default(autoincrement())
+  productId     BigInt?   @map("product_id")
+  parentId      BigInt?   @default(0) @map("parent_id")
+  sku           String?   @db.VarChar(100)
+  ean           String?   @db.VarChar(50)
+  categoryId    Int?      @map("category_id")
+  categoryName  String?   @map("category_name") @db.VarChar(150)
+  productName   String?   @map("product_name") @db.VarChar(255)
+  isVariant     Boolean?  @default(false) @map("is_variant")
+  inventoryId   Int?      @map("inventory_id")
+  syncedAt      DateTime? @map("synced_at")
+  warranty      String?   @db.VarChar(100)
+  createdAt     DateTime? @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+
+  @@map("bl_products")
+}
+
+// baseorders is wide — prefer raw SQL in src/lib/crud/baseorders.ts
+
+// ─── Logistics ───────────────────────────────────────────
+
+model Shipment {
+  shipmentId       Int       @id @default(autoincrement()) @map("shipment_id")
+  ticketId         Int       @map("ticket_id")
+  awbNumber        String    @map("awb_number") @db.VarChar(100)
+  courierPartner   String    @map("courier_partner") @db.VarChar(100)
+  shipmentType     String    @default("forward") @map("shipment_type") @db.VarChar(20)
+  pickupAddress    String?   @map("pickup_address") @db.Text
+  deliveryAddress  String    @map("delivery_address") @db.Text
+  shipmentStatus   String?   @default("created") @map("shipment_status") @db.VarChar(50)
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  actualDelivery   DateTime? @map("actual_delivery")
+  weightKg         Decimal?  @map("weight_kg") @db.Decimal(8, 3)
+  dimensions       String?   @db.VarChar(100)
+  declaredValue    Decimal?  @map("declared_value") @db.Decimal(10, 2)
+  codAmount        Decimal?  @default(0) @map("cod_amount") @db.Decimal(10, 2)
+  shipwayOrderId   String?   @map("shipway_order_id") @db.VarChar(100)
+  trackingUrl      String?   @map("tracking_url") @db.VarChar(500)
+  createdAt        DateTime? @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+
+  @@map("shipments")
+}

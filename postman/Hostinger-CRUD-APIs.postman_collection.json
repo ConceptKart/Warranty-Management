@@ -1,0 +1,837 @@
+{
+  "info": {
+    "_postman_id": "wm-hostinger-crud-next",
+    "name": "Hostinger CRUD APIs (Next.js)",
+    "description": "Next.js parity of Hostinger PHP endpoints:\n`/api/api_users`, `api_tickets`, `api_ticket_statuses`, `api_shipments`, `api_orders`, `api_customers`, `api_category_issues`, `api_bl_products`, `api_baseorders`\n\n## Setup (local DB)\n1. `DATABASE_URL` → local MySQL in `.env`\n2. Set `CRUD_API_KEY=dev-test-key` in `.env`\n3. `npm run dev`\n4. Import this collection + environment **Warranty Management Local**\n5. Select that environment; header `x-crud-api-key` is set at collection level\n\n## Auth\nUse `x-crud-api-key: {{crudApiKey}}` **or** run Admin Login from the main Next.js collection (cookie).\n\nPrefer GET while exploring. POST/PUT/DELETE change local DB.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "x-crud-api-key", "type": "string" },
+      { "key": "value", "value": "{{crudApiKey}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "crudApiKey", "value": "dev-test-key" },
+    { "key": "ticketId", "value": "1" },
+    { "key": "ticketSearch", "value": "WR2026100276" },
+    { "key": "orderId", "value": "1" },
+    { "key": "customerId", "value": "1" },
+    { "key": "userId", "value": "1" },
+    { "key": "shipmentId", "value": "1" },
+    { "key": "awbNumber", "value": "90690644833" },
+    { "key": "categoryIssueId", "value": "1" },
+    { "key": "blProductId", "value": "1" },
+    { "key": "baseorderId", "value": "1" },
+    { "key": "statusId", "value": "1" },
+    { "key": "page", "value": "1" },
+    { "key": "limit", "value": "10" }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/health",
+            "description": "Confirms app + DB connection (no CRUD key needed)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. api_users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/api_users",
+            "description": "Returns `{ status, total, data }` (all admin users)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get user by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_users?id={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_users"],
+              "query": [{ "key": "id", "value": "{{userId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman_user\",\n  \"password\": \"Test@1234\",\n  \"full_name\": \"Postman Test User\",\n  \"email\": \"postman@example.com\",\n  \"role\": \"support\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_users",
+            "description": "Required: username, password, full_name."
+          },
+          "response": []
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{userId}},\n  \"full_name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"support\",\n  \"is_active\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/api_users"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_users?id={{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_users"],
+              "query": [{ "key": "id", "value": "{{userId}}" }]
+            },
+            "description": "Destructive — uses local DB only with your current DATABASE_URL."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. api_tickets",
+      "item": [
+        {
+          "name": "List tickets (page)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_tickets?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_tickets"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            },
+            "description": "Check channel via linked order later. See selected_products_json for product count."
+          },
+          "response": []
+        },
+        {
+          "name": "Search ticket",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_tickets?search={{ticketSearch}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_tickets"],
+              "query": [{ "key": "search", "value": "{{ticketSearch}}" }]
+            },
+            "description": "New vs existing: if search finds a row, ticket exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Get ticket by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_tickets?id={{ticketId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_tickets"],
+              "query": [{ "key": "id", "value": "{{ticketId}}" }]
+            },
+            "description": "Inspect selected_products_json (multi-product on one ticket) and status_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"product_id\": 1,\n  \"customer_description\": \"Postman test claim — product not working\",\n  \"ticket_type_id\": 1,\n  \"issue_type_id\": 1,\n  \"priority\": \"medium\",\n  \"selected_products_json\": [\n    { \"sku\": \"TEST-SKU-1\", \"name\": \"Test Product 1\", \"quantity\": 1 },\n    { \"sku\": \"TEST-SKU-2\", \"name\": \"Test Product 2\", \"quantity\": 1 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/api_tickets",
+            "description": "Required: order_id, product_id, customer_description. Multiple products go in selected_products_json on ONE ticket."
+          },
+          "response": []
+        },
+        {
+          "name": "Update ticket",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_id\": {{ticketId}},\n  \"priority\": \"high\",\n  \"internal_notes\": \"Updated via Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_tickets"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete ticket",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_tickets?id={{ticketId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_tickets"],
+              "query": [{ "key": "id", "value": "{{ticketId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. api_ticket_statuses",
+      "item": [
+        {
+          "name": "List statuses",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/api_ticket_statuses"
+          },
+          "response": []
+        },
+        {
+          "name": "Get status by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_ticket_statuses?id={{statusId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_ticket_statuses"],
+              "query": [{ "key": "id", "value": "{{statusId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_name\": \"Postman Test Status\",\n  \"status_code\": \"postman_test\",\n  \"ticket_type_id\": 1,\n  \"sort_order\": 99,\n  \"status_color\": \"#6c757d\",\n  \"is_final\": 0,\n  \"is_active\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/api_ticket_statuses"
+          },
+          "response": []
+        },
+        {
+          "name": "Update status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_id\": {{statusId}},\n  \"status_name\": \"Postman Test Status Updated\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_ticket_statuses"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete status",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_ticket_statuses?id={{statusId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_ticket_statuses"],
+              "query": [{ "key": "id", "value": "{{statusId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. api_shipments",
+      "item": [
+        {
+          "name": "List shipments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_shipments?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_shipments"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get shipment by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_shipments?id={{shipmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_shipments"],
+              "query": [{ "key": "id", "value": "{{shipmentId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get shipment by AWB",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_shipments?awb={{awbNumber}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_shipments"],
+              "query": [{ "key": "awb", "value": "{{awbNumber}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create shipment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_id\": {{ticketId}},\n  \"awb_number\": \"POSTMAN-TEST-AWB-001\",\n  \"courier_partner\": \"Bluedart\",\n  \"delivery_address\": \"Test address, City, State, 560001\",\n  \"shipment_type\": \"reverse\",\n  \"shipment_status\": \"created\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_shipments",
+            "description": "Required: ticket_id, awb_number, courier_partner, delivery_address."
+          },
+          "response": []
+        },
+        {
+          "name": "Update shipment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment_id\": {{shipmentId}},\n  \"shipment_status\": \"in_transit\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_shipments"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete shipment",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_shipments?id={{shipmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_shipments"],
+              "query": [{ "key": "id", "value": "{{shipmentId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. api_orders",
+      "item": [
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_orders?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_orders"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            },
+            "description": "Check source_platform: amazon | shopify (Conceptkart.com)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get order by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_orders?id={{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_orders"],
+              "query": [{ "key": "id", "value": "{{orderId}}" }]
+            },
+            "description": "Channel = source_platform. Also returns customer_email / phone."
+          },
+          "response": []
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baselinker_order_id\": \"#CK-POSTMAN-001\",\n  \"customer_id\": {{customerId}},\n  \"order_number\": \"#CK-POSTMAN-001-W\",\n  \"source_platform\": \"shopify\",\n  \"order_status\": \"Shopify Order\",\n  \"order_value\": 0,\n  \"order_date\": \"2026-10-09 12:00:00\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_orders",
+            "description": "Required: baselinker_order_id, customer_id. Use amazon or shopify for channel."
+          },
+          "response": []
+        },
+        {
+          "name": "Update order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{orderId}},\n  \"order_status\": \"Updated via Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_orders"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete order",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_orders?id={{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_orders"],
+              "query": [{ "key": "id", "value": "{{orderId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. api_customers",
+      "item": [
+        {
+          "name": "List customers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_customers?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_customers"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get customer by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_customers?id={{customerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_customers"],
+              "query": [{ "key": "id", "value": "{{customerId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman.customer@example.com\",\n  \"first_name\": \"Postman\",\n  \"last_name\": \"Customer\",\n  \"phone\": \"9999999999\",\n  \"address\": \"Test address\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_customers",
+            "description": "Required: email."
+          },
+          "response": []
+        },
+        {
+          "name": "Update customer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": {{customerId}},\n  \"phone\": \"8888888888\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_customers"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete customer",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_customers?id={{customerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_customers"],
+              "query": [{ "key": "id", "value": "{{customerId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. api_category_issues",
+      "item": [
+        {
+          "name": "List category issues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_category_issues?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_category_issues"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get category issue by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_category_issues?id={{categoryIssueId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_category_issues"],
+              "query": [{ "key": "id", "value": "{{categoryIssueId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create category issue",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"Wireless Keyboard\",\n  \"issue_name\": \"Postman test issue\",\n  \"troubleshooting_steps\": \"Step 1: Restart device. Step 2: Reconnect.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_category_issues",
+            "description": "Required: category, issue_name, troubleshooting_steps."
+          },
+          "response": []
+        },
+        {
+          "name": "Update category issue",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{categoryIssueId}},\n  \"issue_name\": \"Postman test issue updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/api_category_issues?id={{categoryIssueId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_category_issues"],
+              "query": [{ "key": "id", "value": "{{categoryIssueId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete category issue",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_category_issues?id={{categoryIssueId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_category_issues"],
+              "query": [{ "key": "id", "value": "{{categoryIssueId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. api_bl_products",
+      "item": [
+        {
+          "name": "List bl_products",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_bl_products?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_bl_products"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            },
+            "description": "Product warranty text lives in `warranty` field."
+          },
+          "response": []
+        },
+        {
+          "name": "Get bl_product by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_bl_products?id={{blProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_bl_products"],
+              "query": [{ "key": "id", "value": "{{blProductId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create bl_product",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 999001,\n  \"inventory_id\": 1316,\n  \"sku\": \"POSTMAN-TEST-SKU\",\n  \"product_name\": \"Postman Test Product\",\n  \"ean\": \"000000000001\",\n  \"warranty\": \"1 year\",\n  \"category_name\": \"Test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_bl_products",
+            "description": "Full schema requires product_id + inventory_id. Slim local schema accepts sku/product_name."
+          },
+          "response": []
+        },
+        {
+          "name": "Update bl_product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{blProductId}},\n  \"warranty\": \"2 years\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_bl_products"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete bl_product",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_bl_products?id={{blProductId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_bl_products"],
+              "query": [{ "key": "id", "value": "{{blProductId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. api_baseorders",
+      "item": [
+        {
+          "name": "List baseorders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_baseorders?page={{page}}&limit={{limit}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_baseorders"],
+              "query": [
+                { "key": "page", "value": "{{page}}" },
+                { "key": "limit", "value": "{{limit}}" }
+              ]
+            },
+            "description": "Needs `baseorders` table in local DB (see schema.sql)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get baseorder by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_baseorders?id={{baseorderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_baseorders"],
+              "query": [{ "key": "id", "value": "{{baseorderId}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by external_order_id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_baseorders?external_order_id=CK224292",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_baseorders"],
+              "query": [{ "key": "external_order_id", "value": "CK224292" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create baseorder",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 9990001,\n  \"shop_order_id\": \"POSTMAN-1\",\n  \"external_order_id\": \"CK-POSTMAN-1\",\n  \"email\": \"postman@example.com\",\n  \"phone\": \"9999999999\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_baseorders",
+            "description": "Required: order_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update baseorder",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{baseorderId}},\n  \"admin_comments\": \"Updated via Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/api/api_baseorders"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete baseorder",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_baseorders?id={{baseorderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_baseorders"],
+              "query": [{ "key": "id", "value": "{{baseorderId}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

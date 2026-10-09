@@ -1,0 +1,1140 @@
+/* Portal UI — mirrors public/css/style.css; overrides Bootstrap inside .portal-body */
+
+.portal-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.portal-body .container-fluid {
+  min-height: 100vh;
+  padding-top: 1rem;
+  padding-bottom: 2rem;
+}
+
+.portal-body .logo-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.portal-body .logo-responsive {
+  transition: all 0.3s ease;
+  max-width: 450px !important;
+  width: 338px;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.portal-body .header {
+  margin-bottom: 2rem;
+}
+
+.portal-body .header h1 {
+  color: #2c3e50;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  font-size: 2.5rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .portal-body .header h1 {
+    font-size: 3rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .portal-body .header h1 {
+    font-size: 1.75rem;
+  }
+
+  .portal-body .header p {
+    font-size: 1rem;
+  }
+}
+
+.portal-body .header p {
+  color: #6c757d;
+  font-size: 1.1rem;
+  margin-bottom: 0;
+  font-weight: 400;
+}
+
+/* Progress steps */
+.portal-body .progress-bar-container {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.portal-body .progress-bar-container::before {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: 12.5%;
+  right: 12.5%;
+  height: 2px;
+  background-color: #e9ecef;
+  z-index: 1;
+}
+
+@media (max-width: 576px) {
+  .portal-body .progress-bar-container::before {
+    left: 10%;
+    right: 10%;
+  }
+}
+
+.portal-body .step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  background-color: #f8f9fa;
+  padding: 0 0.5rem;
+  text-align: center;
+}
+
+@media (min-width: 576px) {
+  .portal-body .step {
+    padding: 0 1rem;
+  }
+}
+
+.portal-body .step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e9ecef;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.portal-body .step-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 500;
+  text-align: center;
+}
+
+.portal-body .step.active .step-number {
+  background-color: #007bff;
+  color: white;
+}
+
+.portal-body .step.active .step-label {
+  color: #007bff;
+  font-weight: 600;
+}
+
+.portal-body .step.completed .step-number {
+  background-color: #28a745;
+  color: white;
+}
+
+.portal-body .step.completed .step-label {
+  color: #28a745;
+}
+
+/* Cards — match PHP .card (not Bootstrap card) */
+.portal-body .card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+  margin-bottom: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.portal-body .card h2 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.portal-body .card h3 {
+  color: #495057;
+  margin-bottom: 15px;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.portal-body .card > p {
+  color: #6c757d;
+  margin-bottom: 20px;
+}
+
+.portal-body .card + .card {
+  margin-top: 30px;
+}
+
+/* Forms — PHP portal inputs, not Bootstrap form-control */
+.portal-body .form {
+  margin-top: 20px;
+}
+
+.portal-body .form-group {
+  margin-bottom: 25px;
+}
+
+.portal-body .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.95rem;
+}
+
+.portal-body .form-group input,
+.portal-body .form-group select,
+.portal-body .form-group textarea,
+.portal-body .form-group .form-control,
+.portal-body .form-group .form-select {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  background-color: #fff;
+  min-height: 48px;
+  touch-action: manipulation;
+  color: #333;
+  box-shadow: none;
+  appearance: auto;
+}
+
+.portal-body .form-group input:focus,
+.portal-body .form-group select:focus,
+.portal-body .form-group textarea:focus,
+.portal-body .form-group .form-control:focus,
+.portal-body .form-group .form-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.portal-body .form-group small {
+  display: block;
+  margin-top: 5px;
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .portal-body .form-group input,
+  .portal-body .form-group select,
+  .portal-body .form-group textarea,
+  .portal-body .form-group .form-control,
+  .portal-body .form-group .form-select {
+    padding: 16px 20px;
+    font-size: 16px;
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 480px) {
+  .portal-body .card {
+    padding: 20px;
+  }
+
+  .portal-body .card h2 {
+    font-size: 1.45rem;
+  }
+
+  .portal-body .form-group input,
+  .portal-body .form-group select,
+  .portal-body .form-group textarea,
+  .portal-body .form-group .form-control,
+  .portal-body .form-group .form-select {
+    padding: 18px 20px;
+    min-height: 56px;
+    font-size: 16px;
+  }
+}
+
+/* Buttons — PHP portal .btn */
+.portal-body .btn {
+  display: inline-block;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 120px;
+  min-height: 48px;
+  line-height: 1.2;
+  touch-action: manipulation;
+  width: auto;
+}
+
+.portal-body .btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.portal-body .btn-primary:hover,
+.portal-body .btn-primary:focus {
+  background-color: #0056b3;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.portal-body .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 16px;
+  margin: 5px 0;
+}
+
+.portal-body .btn-secondary:hover,
+.portal-body .btn-secondary:focus {
+  background-color: #545b62;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.portal-body .btn-outline-primary {
+  background: transparent;
+  color: #007bff;
+  border: 2px solid #007bff;
+}
+
+.portal-body .btn-outline-primary:hover {
+  background: #007bff;
+  color: white;
+}
+
+.portal-body .btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .portal-body .btn {
+    padding: 16px 32px;
+    min-height: 52px;
+    font-size: 1.1rem;
+    width: 100%;
+    margin-bottom: 0.75rem;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .portal-body .btn {
+    padding: 18px 24px;
+    min-height: 56px;
+    font-size: 1.125rem;
+  }
+}
+
+/* Alerts — PHP .alert-error */
+.portal-body .alert {
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  border-left: 4px solid;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.portal-body .alert-error,
+.portal-body .alert-danger {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-left-color: #dc3545;
+}
+
+.portal-body .alert-warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border-left-color: #ffc107;
+}
+
+.portal-body .alert-success {
+  background-color: #d4edda;
+  color: #155724;
+  border-left-color: #28a745;
+}
+
+.portal-body .alert-info {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  border-left-color: #17a2b8;
+}
+
+/* Track / info layout */
+.portal-body .info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .portal-body .info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.portal-body .info-item .label {
+  display: block;
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.portal-body .info-item .value {
+  color: #212529;
+  font-weight: 500;
+}
+
+.portal-body .status-live-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #15803d;
+}
+
+.portal-body .ticket-number {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.portal-body .ticket-number .label {
+  font-weight: 600;
+  color: #6c757d;
+  margin-right: 0.5rem;
+}
+
+.portal-body .ticket-number .value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #007bff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.portal-body .status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.375rem;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.portal-body .status-badge.status-valid {
+  background: #198754;
+}
+
+.portal-body .status-badge.status-info {
+  background: #0d6efd;
+}
+
+.portal-body .replacement-priority-notice {
+  margin-top: 0.55rem;
+  background: #fff8e6;
+  border: 1px solid #ffe08a;
+  border-radius: 4px;
+  color: #7a5c00;
+  padding: 8px 10px;
+}
+
+.portal-body .replacement-priority-notice small {
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.portal-body .product-option {
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #fff;
+}
+
+.portal-body .product-option:hover,
+.portal-body .product-option.selected {
+  border-color: #007bff;
+  background: #f0f7ff;
+}
+
+.portal-body .form-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.portal-body .portal-footer {
+  text-align: center;
+  color: #adb5bd;
+  font-size: 0.8rem;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.portal-body .portal-footer a {
+  color: #adb5bd;
+  text-decoration: none;
+}
+
+.portal-body .portal-footer a:hover {
+  color: #6c757d;
+  text-decoration: underline;
+}
+
+/* Claim form — match PHP order/customer summary */
+.portal-body .order-summary {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.portal-body .info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.portal-body .info-row:last-child {
+  border-bottom: none;
+}
+
+.portal-body .info-row .label {
+  font-weight: 600;
+  color: #6c757d;
+  min-width: 120px;
+}
+
+.portal-body .info-row .value {
+  color: #212529;
+  font-weight: 500;
+  text-align: right;
+}
+
+.portal-body .customer-info .info-row {
+  align-items: flex-start;
+}
+
+.portal-body .success-icon {
+  font-size: 4rem;
+  color: #28a745;
+  text-align: center;
+  margin-bottom: 20px;
+  background: none;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  display: block;
+}
+
+.portal-body .ticket-info {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 25px;
+  margin-bottom: 25px;
+}
+
+.portal-body .ticket-number {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border: 2px solid #007bff;
+}
+
+.portal-body .ticket-number .label {
+  font-weight: 600;
+  color: #495057;
+  margin-right: 0;
+}
+
+.portal-body .ticket-number .value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #007bff;
+  font-family: monospace;
+}
+
+.portal-body .info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.portal-body .info-item .label {
+  display: block;
+  font-size: 0.9rem;
+  color: #495057;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.portal-body .info-item .value {
+  color: #6c757d;
+  font-weight: 400;
+}
+
+.portal-body .next-steps {
+  background-color: #e7f3ff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+  margin-top: 0;
+}
+
+.portal-body .next-steps h3 {
+  color: #0056b3;
+  margin-bottom: 15px;
+}
+
+.portal-body .next-steps ol,
+.portal-body .next-steps ul {
+  padding-left: 20px;
+  color: #495057;
+}
+
+.portal-body .next-steps li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.portal-body .description-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e9ecef;
+}
+
+.portal-body .warranty-status {
+  margin-top: 16px;
+}
+
+.portal-body .warranty-notice {
+  background-color: #e7f3ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 4px;
+  color: #0056b3;
+  padding: 10px 12px;
+}
+
+.portal-body .warranty-notice small {
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.portal-body .product-option {
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #fff;
+}
+
+.portal-body .product-option:hover,
+.portal-body .product-option.selected {
+  border-color: #007bff;
+  background: #f0f7ff;
+}
+
+/* Multi-product cards — match PHP */
+.portal-body .product-selection-container {
+  margin-top: 15px;
+}
+
+.portal-body .product-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+
+.portal-body .product-card {
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  position: relative;
+  cursor: pointer;
+  width: 100%;
+}
+
+.portal-body .product-card:hover {
+  border-color: #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+.portal-body .product-card.selected {
+  border-color: #007bff;
+  background-color: #f8f9ff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+}
+
+.portal-body .product-card-header {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.portal-body .product-checkbox-container {
+  margin-right: 15px;
+  margin-top: 5px;
+}
+
+.portal-body .product-checkbox {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  width: 0;
+  height: 0;
+}
+
+.portal-body .product-checkbox-label {
+  cursor: pointer;
+  display: block;
+  margin: 0;
+}
+
+.portal-body .checkbox-custom {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #dee2e6;
+  border-radius: 4px;
+  background-color: white;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.portal-body .product-checkbox:checked + .product-checkbox-label .checkbox-custom {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.portal-body
+  .product-checkbox:checked
+  + .product-checkbox-label
+  .checkbox-custom::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.portal-body .product-name {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  line-height: 1.4;
+}
+
+.portal-body .product-warranty-info {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.portal-body .product-warranty-info.warranty-active {
+  color: #28a745;
+}
+
+.portal-body .product-warranty-info.warranty-expired {
+  color: #dc3545;
+}
+
+.portal-body .product-warranty-info.warranty-none {
+  color: #6c757d;
+}
+
+.portal-body .quantity-controls {
+  display: block;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e9ecef;
+}
+
+.portal-body .quantity-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+}
+
+.portal-body .quantity-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portal-body .quantity-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ced4da;
+  background: #f8f9fa;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.portal-body .quantity-input {
+  width: 60px;
+  height: 32px;
+  text-align: center;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.portal-body .customer-info-section {
+  margin: 30px 0;
+  padding: 25px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.portal-body .customer-info-section h3 {
+  color: #2c3e50;
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.portal-body .file-upload-container {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.portal-body .file-upload-container:hover {
+  border-color: #007bff;
+  background-color: #e3f2fd;
+}
+
+.portal-body .file-upload-container input[type="file"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  min-height: auto;
+}
+
+.portal-body .upload-requirements {
+  margin-top: 15px;
+  text-align: left;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.portal-body .upload-requirements ul {
+  margin: 10px 0 0 20px;
+  color: #856404;
+}
+
+.portal-body .upload-requirements li {
+  margin-bottom: 5px;
+}
+
+.portal-body .file-preview {
+  margin-top: 20px;
+  text-align: left;
+  background-color: #d1ecf1;
+  border: 1px solid #bee5eb;
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.portal-body .file-preview h4 {
+  color: #0c5460;
+  margin-bottom: 10px;
+}
+
+.portal-body .file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #bee5eb;
+}
+
+.portal-body .file-item:last-child {
+  border-bottom: none;
+}
+
+.portal-body .file-name {
+  font-weight: 500;
+  color: #0c5460;
+}
+
+.portal-body .customer-info-edit input {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 1rem;
+  background-color: #fff;
+  min-height: 48px;
+}
+
+.portal-body .customer-info-edit input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.portal-body .btn-sm {
+  min-width: auto;
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 576px) {
+  .portal-body .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .portal-body .info-row .value {
+    text-align: left;
+  }
+}
+
+/* City / State / Pincode — light border inputs */
+.portal-body .address-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.portal-body .address-field {
+  flex: 2;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.portal-body .address-field-pin {
+  flex: 1;
+  min-width: 90px;
+}
+
+.portal-body .light-border-input,
+.portal-body .form-group input.light-border-input {
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.portal-body .light-border-input:focus,
+.portal-body .form-group input.light-border-input:focus {
+  border-color: #adb5bd;
+  box-shadow: 0 0 0 0.15rem rgba(173, 181, 189, 0.25);
+  outline: none;
+}
+
+/* Troubleshooting — match PHP public/css/style.css */
+.portal-body .issue-category {
+  color: #6c757d;
+  margin-bottom: 20px;
+  font-style: italic;
+}
+
+.portal-body .troubleshooting-steps {
+  margin: 20px 0;
+}
+
+.portal-body .steps-heading {
+  color: #495057;
+  font-size: 1.05rem;
+  margin: 0 0 12px 0;
+}
+
+.portal-body .troubleshooting-guide {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.portal-body .troubleshooting-guide h3 {
+  color: #495057;
+  margin: 0 0 15px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.portal-body .troubleshooting-step {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.portal-body .troubleshooting-step h4 {
+  color: #495057;
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.portal-body .guide-content,
+.portal-body .step-content {
+  line-height: 1.7;
+  color: #495057;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.portal-body .troubleshooting-continue-form {
+  margin-top: 24px;
+}
+
+.portal-body .resolution-check {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin: 5px 0 16px 0;
+  max-width: 100%;
+}
+
+.portal-body .resolution-check h3 {
+  color: #856404;
+  margin: 0 0 12px 0;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.portal-body .radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.portal-body .radio-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  margin: 4px 0;
+  min-height: auto;
+  gap: 0;
+}
+
+.portal-body .radio-option:hover,
+.portal-body .radio-option:has(input:checked) {
+  background: transparent;
+  border: none;
+}
+
+.portal-body .radio-option input[type="radio"] {
+  margin: 0 8px 0 0;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  appearance: auto;
+  -webkit-appearance: radio;
+  vertical-align: middle;
+}
+
+.portal-body .radio-label {
+  font-size: 0.9rem;
+  font-weight: normal;
+  color: #495057;
+  line-height: 1.2;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .portal-body .resolution-check {
+    padding: 12px 16px;
+  }
+
+  .portal-body .troubleshooting-guide,
+  .portal-body .troubleshooting-step {
+    padding: 15px;
+  }
+
+  .portal-body .radio-label {
+    white-space: normal;
+  }
+}

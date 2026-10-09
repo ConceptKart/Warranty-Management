@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+postman
+coverage
+.tmp
+tmp-*
+**/*.log
+.DS_Store
