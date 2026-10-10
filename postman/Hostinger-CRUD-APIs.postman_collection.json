@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "wm-hostinger-crud-next",
     "name": "Hostinger CRUD APIs (Next.js)",
-    "description": "Next.js parity of Hostinger PHP endpoints:\n`/api/api_users`, `api_tickets`, `api_ticket_statuses`, `api_shipments`, `api_orders`, `api_customers`, `api_category_issues`, `api_bl_products`, `api_baseorders`\n\n## Setup (local DB)\n1. `DATABASE_URL` → local MySQL in `.env`\n2. Set `CRUD_API_KEY=dev-test-key` in `.env`\n3. `npm run dev`\n4. Import this collection + environment **Warranty Management Local**\n5. Select that environment; header `x-crud-api-key` is set at collection level\n\n## Auth\nUse `x-crud-api-key: {{crudApiKey}}` **or** run Admin Login from the main Next.js collection (cookie).\n\nPrefer GET while exploring. POST/PUT/DELETE change local DB.",
+    "description": "Next.js parity of Hostinger PHP endpoints.\n\n## Setup (Dokploy)\n1. Import this collection + **Warranty Management Dokploy**\n2. baseUrl = https://warrantymanagement.conceptkart.co.in\n3. Auth: run **Admin Login** (cookie), or set CRUD_API_KEY on Dokploy + crudApiKey here\n\n## Claim + phone\n1. Set ticketSearch = WR2026100427\n2. Run **Search ticket** — response includes customer_phone (after deploy of ticket join)\n3. If phone missing on older deploy: use order_id → **Get order by id** → customer_phone\n\nPrefer GET on live data.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -14,10 +14,10 @@
     ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "crudApiKey", "value": "dev-test-key" },
+    { "key": "baseUrl", "value": "https://warrantymanagement.conceptkart.co.in" },
+    { "key": "crudApiKey", "value": "" },
     { "key": "ticketId", "value": "1" },
-    { "key": "ticketSearch", "value": "WR2026100276" },
+    { "key": "ticketSearch", "value": "WR2026100427" },
     { "key": "orderId", "value": "1" },
     { "key": "customerId", "value": "1" },
     { "key": "userId", "value": "1" },
@@ -32,8 +32,37 @@
   ],
   "item": [
     {
-      "name": "0. Health",
+      "name": "0. Auth + Health",
       "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login ok', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/login",
+            "description": "Sets session cookie. Use this when crudApiKey is empty on Dokploy."
+          },
+          "response": []
+        },
         {
           "name": "Health check",
           "request": {
@@ -146,7 +175,25 @@
           "response": []
         },
         {
-          "name": "Search ticket",
+          "name": "Search ticket (claim / phone)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "const row = Array.isArray(j.data) ? j.data[0] : j.data;",
+                  "if (row) {",
+                  "  if (row.ticket_id) pm.environment.set('ticketId', String(row.ticket_id));",
+                  "  if (row.order_id) pm.environment.set('orderId', String(row.order_id));",
+                  "  if (row.customer_id) pm.environment.set('customerId', String(row.customer_id));",
+                  "  console.log('phone:', row.customer_phone || '(not in this deploy — run Get order by id)');",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [{ "key": "Accept", "value": "application/json" }],
@@ -156,7 +203,22 @@
               "path": ["api", "api_tickets"],
               "query": [{ "key": "search", "value": "{{ticketSearch}}" }]
             },
-            "description": "New vs existing: if search finds a row, ticket exists."
+            "description": "Set ticketSearch to claim no. (e.g. WR2026100427) or phone digits.\n\nAfter deploy: response includes customer_phone, customer_email, order_number, source_platform.\n\nSaves ticketId / orderId / customerId to environment for next requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Get order (phone fallback)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/api_orders?id={{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "api_orders"],
+              "query": [{ "key": "id", "value": "{{orderId}}" }]
+            },
+            "description": "Uses orderId from Search ticket. Returns customer_phone + customer_email (works on current live even before ticket join deploy)."
           },
           "response": []
         },

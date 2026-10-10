@@ -8,14 +8,23 @@ import {
 } from "@/lib/crud/http";
 
 const TICKET_COLS = `
-  ticket_id, ticket_number, order_id, claim_number, product_id,
-  selected_products_json, product_quantity, ticket_type_id, issue_type_id,
-  status_id, customer_description, internal_notes, resolution_details,
-  ticket_date, resolution_date, priority, assigned_to, tracking_number,
-  awb_number, reverse_awb_number, courier_partner, shipment_status,
-  created_at, updated_at, baselinker_integrated, cloned_from_order_id,
-  replacement_ean, replacement_product_id, replacement_variant_id,
-  replacement_warehouse_id, replacement_location, source_device
+  wt.ticket_id, wt.ticket_number, wt.order_id, wt.claim_number, wt.product_id,
+  wt.selected_products_json, wt.product_quantity, wt.ticket_type_id, wt.issue_type_id,
+  wt.status_id, wt.customer_description, wt.internal_notes, wt.resolution_details,
+  wt.ticket_date, wt.resolution_date, wt.priority, wt.assigned_to, wt.tracking_number,
+  wt.awb_number, wt.reverse_awb_number, wt.courier_partner, wt.shipment_status,
+  wt.created_at, wt.updated_at, wt.baselinker_integrated, wt.cloned_from_order_id,
+  wt.replacement_ean, wt.replacement_product_id, wt.replacement_variant_id,
+  wt.replacement_warehouse_id, wt.replacement_location, wt.source_device,
+  o.order_number, o.source_platform, o.customer_id,
+  c.first_name, c.last_name,
+  c.email AS customer_email, c.phone AS customer_phone
+`;
+
+const TICKET_FROM = `
+  FROM warranty_tickets wt
+  LEFT JOIN orders o ON o.order_id = wt.order_id
+  LEFT JOIN customers c ON c.customer_id = o.customer_id
 `;
 
 async function generateTicketNumber(ticketTypeId: number): Promise<string> {
@@ -53,27 +62,32 @@ export async function listTickets(
     const like = `%${term}%`;
     const [countRows, rows] = await Promise.all([
       prisma.$queryRaw<[{ c: bigint }]>`
-        SELECT COUNT(*) AS c FROM warranty_tickets
-        WHERE ticket_number LIKE ${like}
-           OR claim_number LIKE ${like}
-           OR awb_number LIKE ${like}
-           OR reverse_awb_number LIKE ${like}
-           OR CAST(ticket_id AS CHAR) = ${term}
+        SELECT COUNT(*) AS c FROM warranty_tickets wt
+        LEFT JOIN orders o ON o.order_id = wt.order_id
+        LEFT JOIN customers c ON c.customer_id = o.customer_id
+        WHERE wt.ticket_number LIKE ${like}
+           OR wt.claim_number LIKE ${like}
+           OR wt.awb_number LIKE ${like}
+           OR wt.reverse_awb_number LIKE ${like}
+           OR CAST(wt.ticket_id AS CHAR) = ${term}
+           OR c.phone LIKE ${like}
       `,
       prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-        `SELECT ${TICKET_COLS} FROM warranty_tickets
-         WHERE ticket_number LIKE ?
-            OR claim_number LIKE ?
-            OR awb_number LIKE ?
-            OR reverse_awb_number LIKE ?
-            OR CAST(ticket_id AS CHAR) = ?
-         ORDER BY ticket_id DESC
+        `SELECT ${TICKET_COLS} ${TICKET_FROM}
+         WHERE wt.ticket_number LIKE ?
+            OR wt.claim_number LIKE ?
+            OR wt.awb_number LIKE ?
+            OR wt.reverse_awb_number LIKE ?
+            OR CAST(wt.ticket_id AS CHAR) = ?
+            OR c.phone LIKE ?
+         ORDER BY wt.ticket_id DESC
          LIMIT ? OFFSET ?`,
         like,
         like,
         like,
         like,
         term,
+        like,
         limit,
         offset,
       ),
@@ -89,8 +103,8 @@ export async function listTickets(
   const [countRows, rows] = await Promise.all([
     prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM warranty_tickets`,
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT ${TICKET_COLS} FROM warranty_tickets
-       ORDER BY ticket_id DESC LIMIT ? OFFSET ?`,
+      `SELECT ${TICKET_COLS} ${TICKET_FROM}
+       ORDER BY wt.ticket_id DESC LIMIT ? OFFSET ?`,
       limit,
       offset,
     ),
@@ -105,7 +119,7 @@ export async function listTickets(
 
 export async function getTicketById(id: number) {
   const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT ${TICKET_COLS} FROM warranty_tickets WHERE ticket_id = ? LIMIT 1`,
+    `SELECT ${TICKET_COLS} ${TICKET_FROM} WHERE wt.ticket_id = ? LIMIT 1`,
     id,
   );
   return rows[0] ? serializeRow(rows[0]) : null;

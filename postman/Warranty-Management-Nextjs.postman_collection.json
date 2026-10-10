@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Warranty Management Next.js",
-    "description": "API collection for warranty_management_new (Next.js).\n\nAuth notes:\n- Admin APIs: run Admin Auth > Login first. Postman stores the session cookie (warranty_admin_session). Keep cookie jar enabled.\n- Portal APIs: run Portal > Verify Order first (sets warranty_portal_session), then Issue / Claim.\n- Cron APIs: set cronSecret to match CRON_SECRET in .env (sent as x-cron-secret).\n\nDefault local baseUrl: http://localhost:3000",
+    "description": "API collection for warranty_management_new (Next.js).\n\nAuth notes:\n- Admin APIs: run Admin Auth > Login first. Postman stores the session cookie (warranty_admin_session). Keep cookie jar enabled.\n- Portal APIs: run Portal > Verify Order first (sets warranty_portal_session), then Issue / Claim.\n- Cron APIs: set cronSecret to match CRON_SECRET in .env (sent as x-cron-secret).\n\nDefault Dokploy baseUrl: https://warrantymanagement.conceptkart.co.in\nUse environment **Warranty Management Dokploy** (or Local for localhost).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000"
+      "value": "https://warrantymanagement.conceptkart.co.in"
     },
     {
       "key": "cronSecret",
