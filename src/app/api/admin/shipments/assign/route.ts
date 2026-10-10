@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     awbNumber: String(body.awb_number ?? ""),
     courierPartner: String(body.courier_partner ?? ""),
     shipmentType: body.shipment_type === "reverse" ? "reverse" : "forward",
-    assignedBy: session.adminUser.username,
+    assignedBy: auth.user.username,
   });
 
   return NextResponse.json(result, { status: result.success ? 200 : 400 });

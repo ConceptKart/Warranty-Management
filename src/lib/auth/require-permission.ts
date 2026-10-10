@@ -37,8 +37,8 @@ export async function requireAdminPermission(
   const user = session.adminUser;
   const role = user.role;
   const allowed = Array.isArray(permission)
-    ? hasAnyPermission(role, permission)
-    : hasPermission(role, permission);
+    ? hasAnyPermission(role, permission as readonly AdminPermission[])
+    : hasPermission(role, permission as AdminPermission);
 
   if (!allowed) {
     return {
