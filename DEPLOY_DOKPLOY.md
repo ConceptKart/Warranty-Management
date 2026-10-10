@@ -132,11 +132,14 @@ CRON_SECRET=long-random-cron-secret
 
 ### Build-time (Dokploy Build Arguments / Build Secrets)
 
-Also pass so `prisma generate` / build succeed:
+Also pass so `prisma generate` / Next prerender succeed:
 
 ```env
 DATABASE_URL=mysql://u590978274_warmanagement:Warmanagement%402526%23@srv1087.hstgr.io:3306/u590978274_warmanagement
+SESSION_SECRET=replace-with-long-random-string-at-least-32-chars
 ```
+
+(`SESSION_SECRET` is required at **build** time too — portal pages use iron-session during prerender. Runtime env alone is not enough for Docker builds.)
 
 Password encoding: `@` → `%40`, `#` → `%23`  
 (`Warmanagement@2526#` → `Warmanagement%402526%23`)

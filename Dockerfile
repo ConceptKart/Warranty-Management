@@ -15,10 +15,13 @@ RUN apk add --no-cache libc6-compat
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Dokploy: pass DATABASE_URL as build-arg (prisma generate needs a URL shape;
-# it does not migrate or wipe data)
+# Dokploy: pass these as Build Arguments (runtime env alone is not visible here).
+# DATABASE_URL — prisma generate (shape only; does not wipe data)
+# SESSION_SECRET — needed when Next prerenders portal pages that touch iron-session
 ARG DATABASE_URL
+ARG SESSION_SECRET="build-time-session-secret-min-32-chars!!"
 ENV DATABASE_URL=$DATABASE_URL
+ENV SESSION_SECRET=$SESSION_SECRET
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
