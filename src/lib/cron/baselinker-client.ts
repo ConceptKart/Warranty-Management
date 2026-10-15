@@ -4,6 +4,7 @@
 
 export type BaselinkerOrder = {
   order_id?: number | string;
+  shop_order_id?: number | string;
   date_add?: number;
   order_status_id?: number | string;
   order_status_name?: string;

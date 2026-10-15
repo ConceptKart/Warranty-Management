@@ -30,6 +30,7 @@ export function AdminNavbar({
   const trackingActive = pathname.startsWith("/admin/tracking");
   const shipwayLookupActive = pathname.startsWith("/admin/shipway-tracker");
   const amazonActive = pathname.startsWith("/admin/amazon-orders");
+  const shopifyImportActive = pathname.startsWith("/admin/shopify-import");
   const usersActive = pathname.startsWith("/admin/users");
 
   useEffect(() => {
@@ -149,6 +150,15 @@ export function AdminNavbar({
                 onClick={closeNav}
               >
                 Amazon
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link
+                className={`nav-link${shopifyImportActive ? " active" : ""}`}
+                href="/admin/shopify-import"
+                onClick={closeNav}
+              >
+                Shopify
               </Link>
             </li>
             {canManageUsers ? (

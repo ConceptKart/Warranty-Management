@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
 import {
+  importShopifyOrderByShopId,
   searchShopifyOrders,
   syncShopifyDayAndSearch,
 } from "@/lib/admin/shopify-orders";
@@ -42,7 +43,33 @@ export async function POST(request: Request) {
     action?: string;
     q?: string;
     date?: string;
+    shop_order_id?: string;
   };
+
+  if (body.action === "import_order") {
+    try {
+      const result = await importShopifyOrderByShopId(
+        String(body.shop_order_id ?? ""),
+      );
+      return NextResponse.json(result, {
+        status: result.success ? 200 : 400,
+      });
+    } catch (error) {
+      console.error("[admin/shopify-orders import_order]", error);
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error ? error.message : "Shopify import failed",
+          inserted: 0,
+          skipped: 0,
+          shopify_order_id: null,
+          rows: [],
+        },
+        { status: 500 },
+      );
+    }
+  }
 
   if (body.action !== "sync_day") {
     return NextResponse.json(
