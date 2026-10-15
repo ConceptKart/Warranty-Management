@@ -150,6 +150,89 @@ function isShipwaySuccess(decoded: Record<string, unknown> | null) {
   return success === 1 || success === true || success === "1";
 }
 
+/** Shipway carrier list: 1 = Blue Dart (same as ticket-details.php pickup path). */
+function blueDartCarrierId() {
+  return process.env.SHIPWAY_BLUE_DART_CARRIER_ID?.trim() || "1";
+}
+
+function isPincodeUnserviceable(message: string) {
+  const text = message.toLowerCase();
+  return (
+    text.includes("unserviceable") ||
+    text.includes("not serviceable") ||
+    text.includes("non serviceable") ||
+    text.includes("nonserviceable") ||
+    text.includes("not serviceabl") ||
+    text.includes("does not serve") ||
+    text.includes("pickup not available") ||
+    text.includes("pincode not serviceable") ||
+    text.includes("pin code not serviceable") ||
+    text.includes("not available for this pincode") ||
+    text.includes("not available for this pin") ||
+    /pin\s*code.+(not|cannot|can't|unable)/i.test(text) ||
+    /(not|cannot|can't|unable).+(pin\s*code|pincode)/i.test(text)
+  );
+}
+
+function shipwayErrorMessage(
+  decoded: Record<string, unknown> | null,
+  raw: string,
+  fallback: string,
+) {
+  const nested = (key: string) => {
+    const block = decoded?.[key];
+    if (block && typeof block === "object") {
+      return (block as Record<string, unknown>).message;
+    }
+    return undefined;
+  };
+  return (
+    (decoded?.message as string) ||
+    (nested("create_return_response") as string | undefined) ||
+    (nested("order_response") as string | undefined) ||
+    (nested("awb_response") as string | undefined) ||
+    raw ||
+    fallback
+  );
+}
+
+/**
+ * Prefer Blue Dart. If Shipway says the pincode is unserviceable, retry with
+ * a blank carrier_id so another partner (e.g. Delhivery) can be assigned.
+ */
+async function postShipwayPreferringBlueDart(
+  url: string,
+  payload: Record<string, unknown>,
+): Promise<{
+  posted: Awaited<ReturnType<typeof postShipway>>;
+  carrierIdUsed: string;
+}> {
+  const preferred = blueDartCarrierId();
+  const first = await postShipway(url, { ...payload, carrier_id: preferred });
+  const decoded =
+    first.body && typeof first.body === "object"
+      ? (first.body as Record<string, unknown>)
+      : null;
+  if (first.error) {
+    return { posted: first, carrierIdUsed: preferred };
+  }
+  if (
+    first.httpCode >= 200 &&
+    first.httpCode < 300 &&
+    isShipwaySuccess(decoded)
+  ) {
+    return { posted: first, carrierIdUsed: preferred };
+  }
+
+  const message = shipwayErrorMessage(decoded, first.raw, "");
+  if (!isPincodeUnserviceable(message)) {
+    return { posted: first, carrierIdUsed: preferred };
+  }
+
+  const fallback = await postShipway(url, { ...payload, carrier_id: "" });
+  return { posted: fallback, carrierIdUsed: "" };
+}
+
 /**
  * Port of ShipwayService::createReturnShipment (Createreturns API).
  */
@@ -192,7 +275,6 @@ export async function createReturnShipment(
     shipping_lastname: lastName,
     shipping_phone: input.customer_phone,
     shipping_zipcode: input.customer_zipcode,
-    carrier_id: "",
     order_weight: input.weight ?? 100,
     box_length: input.box_length ?? 10,
     box_breadth: input.box_breadth ?? 5,
@@ -203,7 +285,7 @@ export async function createReturnShipment(
     transfer_details: [],
   };
 
-  const result = await postShipway(
+  const { posted: result, carrierIdUsed } = await postShipwayPreferringBlueDart(
     "https://app.shipway.com/api/Createreturns",
     payload,
   );
@@ -228,7 +310,7 @@ export async function createReturnShipment(
       message: "Return shipment created on Shipway successfully",
       awb_number: String(awbResp.AWB ?? ""),
       courier_name: String(awbResp.courier_name ?? ""),
-      carrier_id: String(awbResp.carrier_id ?? ""),
+      carrier_id: String(awbResp.carrier_id ?? carrierIdUsed),
       rma_no: String(createResp.rma_no ?? ""),
       shipping_url: String(
         decoded?.shipping_url ??
@@ -240,12 +322,11 @@ export async function createReturnShipment(
     };
   }
 
-  const message =
-    (decoded?.message as string) ||
-    ((decoded?.create_return_response as Record<string, unknown>)?.message as string) ||
-    ((decoded?.awb_response as Record<string, unknown>)?.message as string) ||
-    result.raw ||
-    "Failed to create return shipment on Shipway";
+  const message = shipwayErrorMessage(
+    decoded,
+    result.raw,
+    "Failed to create return shipment on Shipway",
+  );
 
   return {
     success: false,
@@ -276,7 +357,6 @@ export async function createForwardShipment(
 
   const payload = {
     order_id: input.order_id || "",
-    carrier_id: "",
     warehouse_id: "56024",
     return_warehouse_id: "56024",
     products,
@@ -310,7 +390,7 @@ export async function createForwardShipment(
     order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
   };
 
-  const result = await postShipway(
+  const { posted: result, carrierIdUsed } = await postShipwayPreferringBlueDart(
     "https://app.shipway.com/api/v2orders",
     payload,
   );
@@ -348,7 +428,7 @@ export async function createForwardShipment(
       message: "Forward shipment created on Shipway successfully",
       awb_number: awbNumber,
       courier_name: courierName,
-      carrier_id: String(awbResp.carrier_id ?? ""),
+      carrier_id: String(awbResp.carrier_id ?? carrierIdUsed),
       shipping_url: String(
         decoded?.shipping_url ??
           awbResp.shipping_url ??
@@ -360,12 +440,11 @@ export async function createForwardShipment(
     };
   }
 
-  const message =
-    (decoded?.message as string) ||
-    ((decoded?.order_response as Record<string, unknown>)?.message as string) ||
-    ((decoded?.awb_response as Record<string, unknown>)?.message as string) ||
-    result.raw ||
-    "Failed to create forward shipment on Shipway";
+  const message = shipwayErrorMessage(
+    decoded,
+    result.raw,
+    "Failed to create forward shipment on Shipway",
+  );
 
   return {
     success: false,

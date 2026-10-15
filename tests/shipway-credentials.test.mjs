@@ -34,6 +34,7 @@ beforeEach(() => {
     SHIPWAY_EMAIL: undefined,
     SHIPWAY_API_URL: undefined,
     SHIPWAY_TIMEOUT: undefined,
+    SHIPWAY_BLUE_DART_CARRIER_ID: undefined,
   });
   net = installFetchStub();
   output = captureConsole();
@@ -132,4 +133,69 @@ test("D: provider timeout returns a connection error instead of throwing", async
 
   assert.equal(result.success, false);
   assert.match(result.error, /^Connection error: /);
+});
+
+function postedCarrierId(call) {
+  return JSON.parse(call.init.body).carrier_id;
+}
+
+test("pickups request Blue Dart (carrier_id 1) by default", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 1,
+      awb_response: { AWB: "BD123", courier_name: "Blue Dart", carrier_id: "1" },
+    }),
+  );
+
+  for (const create of [createReturnShipment, createForwardShipment]) {
+    net.calls.length = 0;
+    const result = await create(shipment);
+    assert.equal(result.success, true);
+    assert.equal(net.calls.length, 1);
+    assert.equal(postedCarrierId(net.calls[0]), "1");
+  }
+});
+
+test("another courier is requested only when Blue Dart pincode is unserviceable", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith((_url, init) => {
+    const carrierId = JSON.parse(init.body).carrier_id;
+    if (carrierId === "1") {
+      return jsonResponse({
+        success: 0,
+        message: "Pincode not serviceable for Blue Dart",
+      });
+    }
+    return jsonResponse({
+      success: 1,
+      awb_response: { AWB: "DLV999", courier_name: "Delhivery", carrier_id: "7" },
+    });
+  });
+
+  const result = await createReturnShipment(shipment);
+
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "DLV999");
+  assert.equal(net.calls.length, 2);
+  assert.equal(postedCarrierId(net.calls[0]), "1");
+  assert.equal(postedCarrierId(net.calls[1]), "");
+});
+
+test("non-pincode Shipway errors do not fall back to another courier", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() => jsonResponse({ success: 0, message: "Invalid API credentials" }, 401));
+
+  const result = await createReturnShipment(shipment);
+
+  assert.equal(result.success, false);
+  assert.equal(result.error, "Invalid API credentials");
+  assert.equal(net.calls.length, 1);
+  assert.equal(postedCarrierId(net.calls[0]), "1");
 });
