@@ -54,8 +54,6 @@ export function TicketActions({
   const [changingType, setChangingType] = useState(false);
   const [statusId, setStatusId] = useState(String(currentStatusId));
   const [emailTemplate, setEmailTemplate] = useState("");
-  const [reason, setReason] = useState("");
-  const [notes, setNotes] = useState("");
   const [comment, setComment] = useState("");
   const [emailTo, setEmailTo] = useState(customerEmail);
   const [emailSubject, setEmailSubject] = useState(
@@ -127,8 +125,8 @@ export function TicketActions({
         body: JSON.stringify({
           ticket_id: ticketId,
           status_id: Number(statusId),
-          reason,
-          notes,
+          reason: "",
+          notes: "",
         }),
       });
       const data = await res.json();
@@ -373,23 +371,6 @@ export function TicketActions({
               </div>
             ) : null}
 
-            <div className="mb-3">
-              <label className="form-label">Reason</label>
-              <input
-                className="form-control"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </div>
-            <div className="mb-3">
-              <label className="form-label">Notes</label>
-              <textarea
-                className="form-control"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
             {error ? <div className="alert alert-danger py-2">{error}</div> : null}
             <div className="d-flex justify-content-end gap-2">
               <button

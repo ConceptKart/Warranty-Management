@@ -305,19 +305,6 @@ export default async function TicketDetailsPage({
               </div>
             )}
           </Card>
-
-          <EmailLogCard
-            logs={ticket.email_logs.map((log) => ({
-              log_id: log.log_id,
-              recipient_email: log.recipient_email,
-              subject: log.subject || "",
-              status_code: log.status_code || "",
-              sent: Boolean(log.sent),
-              error_message: log.error_message,
-              body_html: log.body_html,
-              sent_at_label: formatIst(log.sent_at),
-            }))}
-          />
         </div>
 
         <div className="col-lg-4">
@@ -487,6 +474,19 @@ export default async function TicketDetailsPage({
             initialReverse={ticket.tracking.reverse}
             customerAddress={ticket.address || ""}
             canAssignAwb={canAssignAwb}
+          />
+
+          <EmailLogCard
+            logs={ticket.email_logs.map((log) => ({
+              log_id: log.log_id,
+              recipient_email: log.recipient_email,
+              subject: log.subject || "",
+              status_code: log.status_code || "",
+              sent: Boolean(log.sent),
+              error_message: log.error_message,
+              body_html: log.body_html,
+              sent_at_label: formatIst(log.sent_at),
+            }))}
           />
         </div>
       </div>
