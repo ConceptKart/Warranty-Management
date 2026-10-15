@@ -9,6 +9,7 @@ const mocksDir = path.join(root, "tests", "mocks");
 
 const MOCKS = {
   "@/lib/db": "db.mjs",
+  "@/lib/db-external-shipway": "db-external-shipway.mjs",
   "@/lib/auth/get-session": "auth-get-session.mjs",
   "@/components/portal/portal-shell": "portal-shell.mjs",
   "@prisma/client": "prisma-client.mjs",

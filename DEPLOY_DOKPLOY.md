@@ -123,6 +123,10 @@ SHIPWAY_EMAIL=operations@conceptkart.com
 SHIPWAY_API_KEY=your-shipway-key
 SHIPWAY_API_URL=https://app.shipway.com/api
 
+SHOPIFY_STORE=concept-kart.myshopify.com
+SHOPIFY_ACCESS_TOKEN=shpat_your_admin_token
+SHOPIFY_API_VERSION=2025-10
+
 # Optional Postman / external CRUD
 CRUD_API_KEY=long-random-production-key
 

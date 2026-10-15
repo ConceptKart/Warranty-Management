@@ -11,11 +11,12 @@ It does **not** list the app’s own `/api/*` routes (those are internal).
 |----------|------|-------------------|------------|
 | **BaseLinker** | HTTP API | `https://api.baselinker.com/connector.php` | `BASELINKER_TOKEN` |
 | **Shipway** | HTTP API | `https://app.shipway.com/api` | `SHIPWAY_EMAIL` + `SHIPWAY_API_KEY` (or `shipway_config` table) |
+| **Shopify Admin** | REST | `https://{SHOPIFY_STORE}/admin/api/{SHOPIFY_API_VERSION}` | `SHOPIFY_ACCESS_TOKEN` |
 | **Shipway mirror DB** | MySQL | `EXTERNAL_SHIPWAY_DATABASE_URL` | DB user/password in URL |
 | **SMTP (Hostinger)** | Email | `SMTP_HOST` (default `smtp.hostinger.com`) | `SMTP_USERNAME` / `SMTP_PASSWORD` |
 | **Remote upload host** | HTTP upload | `WARRANTY_UPLOAD_URL` or `https://conceptkart.co.in/warrantyreplacement.php` | None (multipart POST) |
 
-**Not used:** Direct Shopify Admin API. Shopify/Website orders are fetched **via BaseLinker**.
+Shopify Admin REST is used by `/admin/shopify-import` (direct order import). Daily Shopify sync still goes **via BaseLinker**.
 
 ---
 

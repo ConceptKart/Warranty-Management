@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/get-session";
+import { updateCkOrderShipmentStatus } from "@/lib/admin/return-order-status";
 import {
   importShopifyOrderByShopId,
+  importShopifyOrderDirect,
   searchShopifyOrders,
   syncShopifyDayAndSearch,
 } from "@/lib/admin/shopify-orders";
@@ -44,7 +46,57 @@ export async function POST(request: Request) {
     q?: string;
     date?: string;
     shop_order_id?: string;
+    shopify_direct_order?: string;
+    ck_order_id?: string;
   };
+
+  if (body.action === "import_shopify_direct") {
+    try {
+      const result = await importShopifyOrderDirect(
+        String(body.shopify_direct_order ?? body.shop_order_id ?? ""),
+      );
+      return NextResponse.json(result, {
+        status: result.success ? 200 : 400,
+      });
+    } catch (error) {
+      console.error("[admin/shopify-orders import_shopify_direct]", error);
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error ? error.message : "Shopify import failed",
+          inserted: 0,
+          skipped: 0,
+          shopify_order_id: null,
+          rows: [],
+        },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (body.action === "update_status") {
+    try {
+      const result = await updateCkOrderShipmentStatus(
+        String(body.ck_order_id ?? ""),
+      );
+      return NextResponse.json(result, {
+        status: result.success ? 200 : 400,
+      });
+    } catch (error) {
+      console.error("[admin/shopify-orders update_status]", error);
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Shipment status update failed",
+        },
+        { status: 500 },
+      );
+    }
+  }
 
   if (body.action === "import_order") {
     try {

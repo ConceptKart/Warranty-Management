@@ -5,6 +5,7 @@ import {
   type BaselinkerOrder,
 } from "@/lib/cron/baselinker-client";
 import { syncShopifyOrders } from "@/lib/cron/shopify-sync";
+import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
 
 export type ShopifyOrderRow = {
   id: number;
@@ -163,7 +164,7 @@ export async function importShopifyOrderByShopId(rawShopOrderId: string): Promis
   if (orders.length === 0) {
     return {
       success: false,
-      message: "Order Not Found",
+      message: "Order Not Found in BaseLinker",
       inserted: 0,
       skipped: 0,
       shopify_order_id: `#CK${shopOrderId}`,
@@ -195,7 +196,7 @@ export async function importShopifyOrderByShopId(rawShopOrderId: string): Promis
       const productId = Number(product.product_id ?? 0);
       const existing = await prisma.$queryRaw<Array<{ id: bigint | number }>>`
         SELECT id FROM shopify_orders
-        WHERE base_order_id = ${baseOrderId}
+        WHERE (base_order_id = ${baseOrderId} OR shopify_order_id = ${shopifyOrderId})
           AND product_id = ${productId}
         LIMIT 1
       `;
@@ -232,7 +233,150 @@ export async function importShopifyOrderByShopId(rawShopOrderId: string): Promis
   const search = await searchShopifyOrders(shopifyOrderId);
   return {
     success: true,
-    message: `Import Completed. Inserted: ${inserted}. Skipped: ${skipped}.`,
+    message: `BaseLinker Import Completed. Inserted: ${inserted}. Skipped: ${skipped}.`,
+    inserted,
+    skipped,
+    shopify_order_id: shopifyOrderId,
+    rows: search.rows,
+  };
+}
+
+function formatShopifyCreatedAt(createdAt?: string) {
+  if (!createdAt) {
+    return formatIstFromUnix(Math.floor(Date.now() / 1000));
+  }
+  const parsed = new Date(createdAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatIstFromUnix(Math.floor(Date.now() / 1000));
+  }
+  return parsed
+    .toLocaleString("sv-SE", { timeZone: "Asia/Kolkata", hour12: false })
+    .replace("T", " ");
+}
+
+function toEan(raw: unknown): number | null {
+  if (raw === undefined || raw === null || String(raw) === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Visible card on the live PHP page: Shopify Admin API → shopify_orders.
+ * product_id / variant_id / base_order_id are stored as 0 (same as PHP).
+ */
+export async function importShopifyOrderDirect(rawInput: string): Promise<{
+  success: boolean;
+  message: string;
+  inserted: number;
+  skipped: number;
+  shopify_order_id: string | null;
+  rows: ShopifyOrderRow[];
+}> {
+  const input = rawInput.trim();
+  if (!input) {
+    return {
+      success: false,
+      message: "Please enter Shopify Order ID or Order Number.",
+      inserted: 0,
+      skipped: 0,
+      shopify_order_id: null,
+      rows: [],
+    };
+  }
+
+  const orderData = await fetchShopifyAdminOrder(input);
+  if (!orderData) {
+    return {
+      success: false,
+      message: "Order Not Found in Shopify Store.",
+      inserted: 0,
+      skipped: 0,
+      shopify_order_id: null,
+      rows: [],
+    };
+  }
+
+  const rawOrderNum = String(orderData.name ?? orderData.order_number ?? "").replace(
+    /\D/g,
+    "",
+  );
+  const shopifyOrderId = `#CK${rawOrderNum || String(orderData.id ?? "")}`;
+  const orderDate = formatShopifyCreatedAt(orderData.created_at);
+
+  let awb = "";
+  for (const fulfillment of orderData.fulfillments ?? []) {
+    if (fulfillment.tracking_number) {
+      awb = String(fulfillment.tracking_number);
+      break;
+    }
+    if (fulfillment.tracking_numbers?.[0]) {
+      awb = String(fulfillment.tracking_numbers[0]);
+      break;
+    }
+  }
+
+  const shipping = orderData.shipping_address ?? orderData.billing_address ?? {};
+  const customer = orderData.customer ?? {};
+  let customerName = `${shipping.first_name ?? customer.first_name ?? ""} ${
+    shipping.last_name ?? customer.last_name ?? ""
+  }`.trim();
+  if (!customerName) customerName = String(shipping.name ?? "");
+
+  const phone = String(
+    shipping.phone ?? orderData.phone ?? customer.phone ?? "",
+  );
+  const email = String(
+    orderData.email ?? customer.email ?? orderData.contact_email ?? "",
+  );
+  const address = `${shipping.address1 ?? ""} ${shipping.address2 ?? ""}`.trim();
+  const city = String(shipping.city ?? "");
+  const state = String(shipping.province ?? shipping.province_code ?? "");
+  const pincode = String(shipping.zip ?? "");
+
+  let inserted = 0;
+  let skipped = 0;
+  const lineItems = orderData.line_items ?? [];
+
+  for (const product of lineItems) {
+    const sku = String(product.sku ?? "");
+    const existing = sku
+      ? await prisma.$queryRaw<Array<{ id: bigint | number }>>`
+          SELECT id FROM shopify_orders
+          WHERE shopify_order_id = ${shopifyOrderId}
+            AND sku = ${sku}
+          LIMIT 1
+        `
+      : await prisma.$queryRaw<Array<{ id: bigint | number }>>`
+          SELECT id FROM shopify_orders
+          WHERE shopify_order_id = ${shopifyOrderId}
+          LIMIT 1
+        `;
+    if (existing.length > 0) {
+      skipped++;
+      continue;
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO shopify_orders (
+        base_order_id, order_date, shopify_order_id, product_id, variant_id,
+        sku, awb_number, customer_name, phone_number, email, customer_address,
+        city, state, pincode, qty, ean, created_at, updated_at
+      ) VALUES (
+        ${"0"}, ${orderDate}, ${shopifyOrderId},
+        ${0}, ${0},
+        ${sku}, ${awb}, ${customerName},
+        ${phone}, ${email}, ${address}, ${city}, ${state}, ${pincode},
+        ${Number(product.quantity ?? 1)}, ${toEan(product.barcode)},
+        NOW(), NOW()
+      )
+    `;
+    inserted++;
+  }
+
+  const search = await searchShopifyOrders(shopifyOrderId);
+  return {
+    success: true,
+    message: `Direct Shopify Import Completed. Order: ${shopifyOrderId}. Inserted: ${inserted}. Skipped: ${skipped}.`,
     inserted,
     skipped,
     shopify_order_id: shopifyOrderId,
