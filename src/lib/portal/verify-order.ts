@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { lookupBlProductsWarranty } from "@/lib/portal/product-warranty";
+import { resolveProductWarranty } from "@/lib/portal/product-warranty";
 import { lookupShopifyOrderClassification } from "@/lib/portal/shopify-classification";
 import type { PortalOrderData } from "@/lib/portal/session";
 
@@ -158,13 +158,8 @@ async function verifyAmazonOrder(amazonOrderId: string): Promise<VerifyResult> {
         }
       }
 
-      // Fallback: bl_products.warranty when amazon_sku_mapping has no period
-      if (warrantyMonths <= 0 && sku) {
-        const bl = await lookupBlProductsWarranty(sku);
-        if (bl && bl.warranty_months > 0) {
-          warrantyMonths = bl.warranty_months;
-        }
-      }
+      const resolved = await resolveProductWarranty({ sku, mappingMonths: warrantyMonths });
+      warrantyMonths = resolved.months;
 
       let warrantyValid = false;
       let warrantyExpiry: string | null = null;
@@ -402,13 +397,8 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
         }
       }
 
-      // Website/PHP: when amazon_sku_mapping missing, use bl_products.warranty
-      if (warrantyMonths <= 0 && sku) {
-        const bl = await lookupBlProductsWarranty(sku);
-        if (bl && bl.warranty_months > 0) {
-          warrantyMonths = bl.warranty_months;
-        }
-      }
+      const resolved = await resolveProductWarranty({ sku, mappingMonths: warrantyMonths });
+      warrantyMonths = resolved.months;
 
       let warrantyValid = false;
       let warrantyExpiry: string | null = null;

@@ -16,6 +16,10 @@ export function setQueryRawUnsafe(fn) {
   handlers.queryRawUnsafe = fn;
 }
 
+export function setExecuteRaw(fn) {
+  handlers.executeRaw = fn;
+}
+
 export function resetDb() {
   calls.length = 0;
   emailLogs.length = 0;
