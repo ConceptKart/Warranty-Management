@@ -186,6 +186,25 @@ test("another courier is requested only when Blue Dart pincode is unserviceable"
   assert.equal(postedCarrierId(net.calls[1]), "");
 });
 
+test("return_reason_id is sent on each product, not at order root", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 1,
+      awb_response: { AWB: "BD124", courier_name: "Blue Dart", carrier_id: "1" },
+    }),
+  );
+
+  await createReturnShipment(shipment);
+
+  const body = JSON.parse(net.calls[0].init.body);
+  const product = body.products[shipment.product_sku];
+  assert.equal(body.return_reason_id, undefined);
+  assert.equal(product.return_reason_id, 76487);
+});
+
 test("non-pincode Shipway errors do not fall back to another courier", async () => {
   process.env.SHIPWAY_API_KEY = KEY;
   process.env.SHIPWAY_EMAIL = EMAIL;

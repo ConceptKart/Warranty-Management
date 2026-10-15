@@ -248,6 +248,7 @@ export async function createReturnShipment(
       product_quantity: input.quantity ?? 1,
       price: input.product_price ?? 0,
       variants: "",
+      return_reason_id: 76487,
     },
   };
 
@@ -280,7 +281,6 @@ export async function createReturnShipment(
     box_breadth: input.box_breadth ?? 5,
     box_height: input.box_height ?? 4,
     return_order_status: "E",
-    return_reason_id: 76487,
     refund_payment_id: 1,
     transfer_details: [],
   };
