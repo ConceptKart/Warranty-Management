@@ -31,6 +31,7 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "manage_statuses",
     "view_internal_comments",
     "add_internal_comments",
+    "assign_awb",
   ],
   support: [
     "view_all_tickets",
@@ -38,6 +39,7 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "manage_statuses",
     "view_internal_comments",
     "add_internal_comments",
+    "assign_awb",
   ],
   operations: [
     "view_all_tickets",
