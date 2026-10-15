@@ -36,6 +36,7 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "view_all_tickets",
     "edit_tickets",
     "manage_statuses",
+    "view_internal_comments",
     "add_internal_comments",
   ],
   operations: [

@@ -75,8 +75,7 @@ async function getShipwayConfig(): Promise<ShipwayConfig> {
   }
 
   return {
-    api_key:
-      process.env.SHIPWAY_API_KEY ?? "78Kf87Vc35Y9P1DNK9M7kxv8w5ktQ965",
+    api_key: process.env.SHIPWAY_API_KEY ?? "",
     api_url: process.env.SHIPWAY_API_URL ?? "https://app.shipway.com/api",
     email: process.env.SHIPWAY_EMAIL ?? "operations@conceptkart.com",
     timeout_seconds: Number(process.env.SHIPWAY_TIMEOUT ?? "30"),
@@ -96,6 +95,14 @@ async function postShipway(
   payload: Record<string, unknown>,
 ): Promise<{ httpCode: number; body: unknown; raw: string; error?: string }> {
   const config = await getShipwayConfig();
+  if (!config.api_key || !config.email) {
+    return {
+      httpCode: 0,
+      body: null,
+      raw: "",
+      error: "Shipway API credentials are not configured.",
+    };
+  }
   const auth = Buffer.from(`${config.email}:${config.api_key}`).toString(
     "base64",
   );

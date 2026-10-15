@@ -102,7 +102,7 @@ Paste these as **runtime** env vars (adjust secrets):
 NODE_ENV=production
 
 # LIVE Hostinger MySQL — same data as PHP (do not point at a new empty DB)
-DATABASE_URL=mysql://u590978274_warmanagement:Warmanagement%402526%23@srv1087.hstgr.io:3306/u590978274_warmanagement
+DATABASE_URL=mysql://u590978274_warmanagement:URL_ENCODED_DB_PASSWORD@srv1087.hstgr.io:3306/u590978274_warmanagement
 
 SESSION_SECRET=replace-with-long-random-32plus-chars
 
@@ -135,14 +135,13 @@ CRON_SECRET=long-random-cron-secret
 Also pass so `prisma generate` / Next prerender succeed:
 
 ```env
-DATABASE_URL=mysql://u590978274_warmanagement:Warmanagement%402526%23@srv1087.hstgr.io:3306/u590978274_warmanagement
+DATABASE_URL=mysql://u590978274_warmanagement:URL_ENCODED_DB_PASSWORD@srv1087.hstgr.io:3306/u590978274_warmanagement
 SESSION_SECRET=replace-with-long-random-string-at-least-32-chars
 ```
 
 (`SESSION_SECRET` is required at **build** time too — portal pages use iron-session during prerender. Runtime env alone is not enough for Docker builds.)
 
-Password encoding: `@` → `%40`, `#` → `%23`  
-(`Warmanagement@2526#` → `Warmanagement%402526%23`)
+Password encoding: `@` → `%40`, `#` → `%23`
 
 **Do not** set a Dokploy-managed MySQL as `DATABASE_URL` unless you intentionally migrate data there.
 
