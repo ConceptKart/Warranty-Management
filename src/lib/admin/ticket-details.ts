@@ -364,6 +364,21 @@ export type TicketShipmentData = {
   source_platform: string | null;
 };
 
+/** PHP tryShipwayReturnShipment: #CK123-W / #CK123-R */
+async function returnOrderIdForTicket(ticketData: TicketShipmentData) {
+  const base = String(
+    ticketData.order_number || ticketData.ticket_number || "",
+  ).trim();
+  const rows = await prisma.$queryRaw<Array<{ type_code: string | null }>>`
+    SELECT type_code FROM ticket_types
+    WHERE ticket_type_id = ${ticketData.ticket_type_id} AND is_active = 1
+    LIMIT 1
+  `;
+  const code = String(rows[0]?.type_code ?? "warranty").toLowerCase();
+  const suffix = code === "replacement" ? "R" : "W";
+  return `${base.replace(/[WRwr]+$/, "")}${suffix}`;
+}
+
 /** Mirrors AdminController::getTicketDataForReturnShipment */
 export async function getTicketDataForShipment(
   ticketId: number,
@@ -637,7 +652,10 @@ export async function createShipwayShipmentAndAssign(input: {
   const baseOrderId =
     ticketData.order_number || ticketData.ticket_number || String(input.ticketId);
   const shipmentData = {
-    order_id: input.mode === "forward" ? `${baseOrderId}P` : baseOrderId,
+    order_id:
+      input.mode === "forward"
+        ? `${baseOrderId}P`
+        : await returnOrderIdForTicket(ticketData),
     ticket_number: ticketData.ticket_number,
     product_name: ticketData.product_name || "Warranty Product",
     product_sku: ticketData.product_sku || "PRODUCT",
@@ -680,13 +698,10 @@ export async function createShipwayShipmentAndAssign(input: {
 
   if (!shipwayAwb) {
     return {
-      success: true as const,
-      message: `${label} shipment created on Shipway. AWB will be assigned by courier shortly.`,
-      awb_number: "",
-      courier_name: "",
-      rma_no: rmaNo,
-      shipping_url: shippingUrl,
-      shipment_type: input.mode,
+      success: false as const,
+      error:
+        `Shipway created the ${label.toLowerCase()} without assigning a courier or AWB (Requested).`,
+      shipway_details: shipwayResult.data ?? null,
     };
   }
 
@@ -849,7 +864,7 @@ async function autoCreateReturnOnAccepted(ticketId: number) {
 
   const { createReturnShipment } = await import("@/lib/admin/shipway-service");
   const shipwayResult = await createReturnShipment({
-    order_id: ticketData.order_number || ticketData.ticket_number,
+    order_id: await returnOrderIdForTicket(ticketData),
     ticket_number: ticketData.ticket_number,
     product_name: ticketData.product_name || "Warranty Product",
     product_sku: ticketData.product_sku || "PRODUCT",

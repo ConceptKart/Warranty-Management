@@ -35,6 +35,7 @@ beforeEach(() => {
     SHIPWAY_API_URL: undefined,
     SHIPWAY_TIMEOUT: undefined,
     SHIPWAY_BLUE_DART_CARRIER_ID: undefined,
+    SHIPWAY_FALLBACK_CARRIER_ID: undefined,
   });
   net = installFetchStub();
   output = captureConsole();
@@ -159,9 +160,29 @@ test("pickups request Blue Dart (carrier_id 1) by default", async () => {
   }
 });
 
-test("another courier is requested only when Blue Dart pincode is unserviceable", async () => {
+test("unserviceable Blue Dart does not retry with a blank carrier_id", async () => {
   process.env.SHIPWAY_API_KEY = KEY;
   process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 0,
+      message: "Pincode not serviceable for Blue Dart",
+    }),
+  );
+
+  const result = await createReturnShipment(shipment);
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /not serviceable/i);
+  assert.equal(net.calls.length, 1);
+  assert.equal(postedCarrierId(net.calls[0]), "1");
+});
+
+test("unserviceable Blue Dart retries a configured fallback carrier, never blank", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  process.env.SHIPWAY_FALLBACK_CARRIER_ID = "7";
   setQueryRaw(async () => []);
   net.respondWith((_url, init) => {
     const carrierId = JSON.parse(init.body).carrier_id;
@@ -183,10 +204,10 @@ test("another courier is requested only when Blue Dart pincode is unserviceable"
   assert.equal(result.awb_number, "DLV999");
   assert.equal(net.calls.length, 2);
   assert.equal(postedCarrierId(net.calls[0]), "1");
-  assert.equal(postedCarrierId(net.calls[1]), "");
+  assert.equal(postedCarrierId(net.calls[1]), "7");
 });
 
-test("return_reason_id is sent on each product, not at order root", async () => {
+test("return pickup payload matches the PHP Accepted path", async () => {
   process.env.SHIPWAY_API_KEY = KEY;
   process.env.SHIPWAY_EMAIL = EMAIL;
   setQueryRaw(async () => []);
@@ -201,8 +222,31 @@ test("return_reason_id is sent on each product, not at order root", async () => 
 
   const body = JSON.parse(net.calls[0].init.body);
   const product = body.products[shipment.product_sku];
+  assert.equal(body.carrier_id, "1");
   assert.equal(body.return_reason_id, undefined);
   assert.equal(product.return_reason_id, 76487);
+  assert.equal(product.price, "1");
+  assert.equal(body.shipping, 55);
+  assert.equal(body.order_total, 1);
+  assert.equal(body.order_weight, 480);
+  assert.equal(body.box_length, 13);
+});
+
+test("a Shipway success without AWB is treated as failure, not Requested", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 1,
+      create_return_response: { rma_no: "RMA-NO-AWB" },
+    }),
+  );
+
+  const result = await createReturnShipment(shipment);
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /no AWB/i);
 });
 
 test("non-pincode Shipway errors do not fall back to another courier", async () => {

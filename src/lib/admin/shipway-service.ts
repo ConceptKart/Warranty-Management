@@ -144,10 +144,41 @@ async function postShipway(
   }
 }
 
+function isTruthySuccess(value: unknown) {
+  return value === 1 || value === true || value === "1";
+}
+
 function isShipwaySuccess(decoded: Record<string, unknown> | null) {
   if (!decoded) return false;
-  const success = decoded.success;
-  return success === 1 || success === true || success === "1";
+  if (isTruthySuccess(decoded.success)) return true;
+  const awbResp = decoded.awb_response;
+  if (awbResp && typeof awbResp === "object" && isTruthySuccess((awbResp as Record<string, unknown>).success)) {
+    return true;
+  }
+  const createResp = decoded.create_return_response;
+  if (
+    createResp &&
+    typeof createResp === "object" &&
+    isTruthySuccess((createResp as Record<string, unknown>).success)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function extractReturnAwb(decoded: Record<string, unknown> | null) {
+  if (!decoded) return "";
+  const awbResp = (decoded.awb_response ?? {}) as Record<string, unknown>;
+  const createResp = (decoded.create_return_response ?? {}) as Record<string, unknown>;
+  return String(
+    awbResp.AWB ??
+      awbResp.awb ??
+      decoded.awb_number ??
+      decoded.AWB ??
+      createResp.awb ??
+      createResp.AWB ??
+      "",
+  );
 }
 
 /** Shipway carrier list: 1 = Blue Dart (same as ticket-details.php pickup path). */
@@ -196,9 +227,14 @@ function shipwayErrorMessage(
   );
 }
 
+function fallbackCarrierId() {
+  return process.env.SHIPWAY_FALLBACK_CARRIER_ID?.trim() || "";
+}
+
 /**
- * Prefer Blue Dart. If Shipway says the pincode is unserviceable, retry with
- * a blank carrier_id so another partner (e.g. Delhivery) can be assigned.
+ * Prefer Blue Dart. If Shipway says the pincode is unserviceable and a
+ * fallback carrier_id is configured, retry that partner. Never send a blank
+ * carrier_id — that creates a Requested return with no courier.
  */
 async function postShipwayPreferringBlueDart(
   url: string,
@@ -225,16 +261,19 @@ async function postShipwayPreferringBlueDart(
   }
 
   const message = shipwayErrorMessage(decoded, first.raw, "");
-  if (!isPincodeUnserviceable(message)) {
+  const fallbackId = fallbackCarrierId();
+  if (!isPincodeUnserviceable(message) || !fallbackId || fallbackId === preferred) {
     return { posted: first, carrierIdUsed: preferred };
   }
 
-  const fallback = await postShipway(url, { ...payload, carrier_id: "" });
-  return { posted: fallback, carrierIdUsed: "" };
+  const fallback = await postShipway(url, { ...payload, carrier_id: fallbackId });
+  return { posted: fallback, carrierIdUsed: fallbackId };
 }
 
 /**
- * Port of ShipwayService::createReturnShipment (Createreturns API).
+ * Port of ticket-details.php tryShipwayReturnShipment (Createreturns API).
+ * Blank carrier_id / missing product return_reason_id / zero price leave
+ * Shipway in Requested with no courier.
  */
 export async function createReturnShipment(
   input: ShipwayShipmentInput,
@@ -245,8 +284,8 @@ export async function createReturnShipment(
     [productKey]: {
       product: input.product_name || "Warranty Return Product",
       product_code: input.product_sku || "",
-      product_quantity: input.quantity ?? 1,
-      price: input.product_price ?? 0,
+      product_quantity: String(input.quantity ?? 1),
+      price: "1",
       variants: "",
       return_reason_id: 76487,
     },
@@ -256,8 +295,8 @@ export async function createReturnShipment(
     order_id: input.order_id || input.ticket_number || "",
     return_warehouse_id: "56024",
     products,
-    shipping: 0,
-    order_total: input.order_total ?? input.product_price ?? 0,
+    shipping: 55,
+    order_total: 1,
     payment_type: "P",
     email: input.customer_email,
     billing_address: input.customer_address,
@@ -276,10 +315,10 @@ export async function createReturnShipment(
     shipping_lastname: lastName,
     shipping_phone: input.customer_phone,
     shipping_zipcode: input.customer_zipcode,
-    order_weight: input.weight ?? 100,
-    box_length: input.box_length ?? 10,
-    box_breadth: input.box_breadth ?? 5,
-    box_height: input.box_height ?? 4,
+    order_weight: input.weight ?? 480,
+    box_length: input.box_length ?? 13,
+    box_breadth: input.box_breadth ?? 12,
+    box_height: input.box_height ?? 9,
     return_order_status: "E",
     refund_payment_id: 1,
     transfer_details: [],
@@ -300,6 +339,15 @@ export async function createReturnShipment(
       : null;
 
   if (result.httpCode >= 200 && result.httpCode < 300 && isShipwaySuccess(decoded)) {
+    const awbNumber = extractReturnAwb(decoded);
+    if (!awbNumber) {
+      return {
+        success: false,
+        error: "Shipway accepted the request but returned no AWB number",
+        http_code: result.httpCode,
+        data: decoded,
+      };
+    }
     const awbResp = (decoded?.awb_response ?? {}) as Record<string, unknown>;
     const createResp = (decoded?.create_return_response ?? {}) as Record<
       string,
@@ -308,8 +356,8 @@ export async function createReturnShipment(
     return {
       success: true,
       message: "Return shipment created on Shipway successfully",
-      awb_number: String(awbResp.AWB ?? ""),
-      courier_name: String(awbResp.courier_name ?? ""),
+      awb_number: awbNumber,
+      courier_name: String(awbResp.courier_name ?? "Blue Dart"),
       carrier_id: String(awbResp.carrier_id ?? carrierIdUsed),
       rma_no: String(createResp.rma_no ?? ""),
       shipping_url: String(
