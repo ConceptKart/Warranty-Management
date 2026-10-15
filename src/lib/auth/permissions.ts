@@ -17,6 +17,7 @@ export const ADMIN_PERMISSIONS = [
   "assign_awb",
   "view_shipment_info",
   "update_pack_status",
+  "import_shopify_orders",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
@@ -32,6 +33,7 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "view_internal_comments",
     "add_internal_comments",
     "assign_awb",
+    "import_shopify_orders",
   ],
   support: [
     "view_all_tickets",
@@ -40,6 +42,7 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "view_internal_comments",
     "add_internal_comments",
     "assign_awb",
+    "import_shopify_orders",
   ],
   operations: [
     "view_all_tickets",

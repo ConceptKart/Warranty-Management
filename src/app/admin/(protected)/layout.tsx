@@ -33,6 +33,7 @@ export default async function AdminProtectedLayout({
           "assign_awb",
           "update_pack_status",
         ])}
+        canImportShopify={hasPermission(role, "import_shopify_orders")}
       />
       <div className="container-fluid admin-content">{children}</div>
     </>

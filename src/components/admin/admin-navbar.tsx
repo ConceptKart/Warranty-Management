@@ -10,12 +10,14 @@ export function AdminNavbar({
   canManageUsers,
   canManageShipments,
   canViewShipmentInfo,
+  canImportShopify,
 }: {
   name: string;
   role: string;
   canManageUsers: boolean;
   canManageShipments: boolean;
   canViewShipmentInfo: boolean;
+  canImportShopify: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -152,15 +154,17 @@ export function AdminNavbar({
                 Amazon
               </Link>
             </li>
-            <li className="nav-item">
-              <Link
-                className={`nav-link${shopifyImportActive ? " active" : ""}`}
-                href="/admin/shopify-import"
-                onClick={closeNav}
-              >
-                Shopify
-              </Link>
-            </li>
+            {canImportShopify ? (
+              <li className="nav-item">
+                <Link
+                  className={`nav-link${shopifyImportActive ? " active" : ""}`}
+                  href="/admin/shopify-import"
+                  onClick={closeNav}
+                >
+                  Shopify
+                </Link>
+              </li>
+            ) : null}
             {canManageUsers ? (
               <li className="nav-item">
                 <Link

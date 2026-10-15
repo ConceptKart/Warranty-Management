@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/get-session";
+import { requireAdminPermission } from "@/lib/auth/require-permission";
 import { updateCkOrderShipmentStatus } from "@/lib/admin/return-order-status";
 import {
   importShopifyOrderByShopId,
@@ -12,10 +12,8 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session.adminUser) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminPermission("import_shopify_orders");
+  if (!auth.ok) return auth.response;
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
   try {
@@ -33,13 +31,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.adminUser) {
-    return NextResponse.json(
-      { success: false, message: "Unauthorized" },
-      { status: 401 },
-    );
-  }
+  const auth = await requireAdminPermission("import_shopify_orders");
+  if (!auth.ok) return auth.response;
 
   const body = (await request.json()) as {
     action?: string;
