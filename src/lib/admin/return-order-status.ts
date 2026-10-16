@@ -4,6 +4,7 @@
  * returnorders.orders by CK order id → Shipway tracking → write shipment_status.
  */
 
+import { prisma } from "@/lib/db";
 import { queryExternalShipway } from "@/lib/db-external-shipway";
 
 export function normalizeCkOrderId(raw: string): string | null {
@@ -13,6 +14,59 @@ export function normalizeCkOrderId(raw: string): string | null {
     orderId = `CK${orderId}`;
   }
   return orderId;
+}
+
+function ckOrderIdVariants(orderId: string) {
+  const digits = orderId.replace(/^CK/i, "");
+  return [
+    ...new Set(
+      [orderId, `#${orderId}`, `CK${digits}`, `#CK${digits}`, digits].filter(
+        Boolean,
+      ),
+    ),
+  ];
+}
+
+async function lookupReplicaOrder(orderId: string) {
+  const variants = ckOrderIdVariants(orderId);
+  const placeholders = variants.map(() => "?").join(",");
+  try {
+    const exact = await queryExternalShipway<
+      Array<{ order_id: string; awb_number: string | null }>
+    >(
+      `SELECT order_id, awb_number FROM orders WHERE order_id IN (${placeholders}) LIMIT 1`,
+      variants,
+    );
+    if (exact[0]) return exact[0];
+
+    const fuzzy = await queryExternalShipway<
+      Array<{ order_id: string; awb_number: string | null }>
+    >(
+      "SELECT order_id, awb_number FROM orders WHERE order_id LIKE ? LIMIT 1",
+      [`%${orderId.replace(/^CK/i, "")}%`],
+    );
+    if (fuzzy[0]) return fuzzy[0];
+  } catch (error) {
+    console.error("[updateCkOrderShipmentStatus] replica lookup:", error);
+  }
+  return null;
+}
+
+async function lookupLocalAwb(orderId: string) {
+  const hashed = `#${orderId}`;
+  const digits = orderId.replace(/^CK/i, "");
+  try {
+    const rows = await prisma.$queryRaw<Array<{ awb_number: string | null }>>`
+      SELECT awb_number FROM shopify_orders
+      WHERE shopify_order_id IN (${orderId}, ${hashed}, ${digits})
+        AND awb_number IS NOT NULL AND awb_number != ''
+      LIMIT 1
+    `;
+    return (rows[0]?.awb_number ?? "").trim() || null;
+  } catch (error) {
+    console.error("[updateCkOrderShipmentStatus] local AWB:", error);
+    return null;
+  }
 }
 
 function extractShipmentStatus(payload: unknown): string {
@@ -47,11 +101,13 @@ export async function updateCkOrderShipmentStatus(rawOrderId: string): Promise<{
     };
   }
 
-  const rows = await queryExternalShipway<Array<{ awb_number: string | null }>>(
-    "SELECT awb_number FROM orders WHERE order_id = ? LIMIT 1",
-    [orderId],
-  );
-  if (!rows[0]) {
+  const replica = await lookupReplicaOrder(orderId);
+  const replicaOrderId = replica?.order_id?.trim() || orderId;
+  const awb =
+    String(replica?.awb_number ?? "").trim() ||
+    (await lookupLocalAwb(orderId)) ||
+    "";
+  if (!replica && !awb) {
     return {
       success: false,
       message: "Order not found.",
@@ -61,12 +117,11 @@ export async function updateCkOrderShipmentStatus(rawOrderId: string): Promise<{
     };
   }
 
-  const awb = String(rows[0].awb_number ?? "").trim();
   if (!awb) {
     return {
       success: false,
       message: "Status not found.",
-      order_id: orderId,
+      order_id: replicaOrderId,
       awb: null,
       status: null,
     };
@@ -109,15 +164,19 @@ export async function updateCkOrderShipmentStatus(rawOrderId: string): Promise<{
     };
   }
 
-  await queryExternalShipway(
-    "UPDATE orders SET shipment_status = ?, last_checked_at = NOW() WHERE order_id = ?",
-    [shipmentStatus, orderId],
-  );
+  try {
+    await queryExternalShipway(
+      "UPDATE orders SET shipment_status = ?, last_checked_at = NOW() WHERE order_id = ?",
+      [shipmentStatus, replicaOrderId],
+    );
+  } catch (error) {
+    console.error("[updateCkOrderShipmentStatus] replica write:", error);
+  }
 
   return {
     success: true,
     message: "Status Updated Successfully",
-    order_id: orderId,
+    order_id: replicaOrderId,
     awb,
     status: shipmentStatus,
   };

@@ -205,8 +205,8 @@ test("direct Shopify import reports not found when the store has no match", asyn
 
 test("shipment status updates return-orders after Shipway tracking", async () => {
   setExternalQuery(async (sql) => {
-    if (sql.includes("SELECT awb_number")) {
-      return [{ awb_number: "AWB999" }];
+    if (sql.includes("FROM orders") && sql.includes("awb_number") && !sql.includes("UPDATE")) {
+      return [{ order_id: "CK282379", awb_number: "AWB999" }];
     }
     return { affectedRows: 1 };
   });

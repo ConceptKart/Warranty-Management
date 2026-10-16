@@ -286,12 +286,19 @@ export async function importShopifyOrderDirect(rawInput: string): Promise<{
 
   const orderData = await fetchShopifyAdminOrder(input);
   if (!orderData) {
+    const fromBaselinker = await importShopifyOrderByShopId(input);
+    if (fromBaselinker.success) {
+      return {
+        ...fromBaselinker,
+        message: `Imported from BaseLinker (not in Shopify Admin search). ${fromBaselinker.message}`,
+      };
+    }
     return {
       success: false,
       message: "Order Not Found in Shopify Store.",
       inserted: 0,
       skipped: 0,
-      shopify_order_id: null,
+      shopify_order_id: fromBaselinker.shopify_order_id,
       rows: [],
     };
   }
