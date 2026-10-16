@@ -41,6 +41,7 @@ function dispatchSql(sql, state) {
   if (sql.includes("SELECT DISTINCT") && sql.includes("shopify_orders")) {
     return state.missingSkus ?? [];
   }
+  if (sql.includes("FROM products")) return state.products ?? [];
   if (sql.includes("FROM amazon_sku_mapping")) return state.mapping ?? [];
   if (sql.includes("FROM bl_products") && sql.includes("warranty IS NOT NULL")) {
     return state.blWarranty ?? [];
@@ -109,6 +110,27 @@ test("resolve matches bl_products.warranty with compacted SKU", async () => {
   const resolved = await resolveProductWarranty({ sku: "CK-AA-01" });
   assert.equal(resolved.source, "bl_products");
   assert.equal(resolved.months, 18);
+  assert.equal(net.calls.length, 0);
+});
+
+test("resolve uses products.warranty_period_months when mapping and bl_products are empty", async () => {
+  net.respondWith(() => {
+    throw new Error("BaseLinker should not be called");
+  });
+  setQueryRaw(async (sql) => {
+    if (sql.includes("FROM products")) {
+      assert.ok(sql.includes("product_sku"));
+      return [{ warranty_period_months: 12 }];
+    }
+    return [];
+  });
+  const resolved = await resolveProductWarranty({
+    sku: "tanchjim-bunny-IEM-Clr-Mic-Type C",
+    catalogProductId: 111,
+  });
+  assert.equal(resolved.source, "products");
+  assert.equal(resolved.months, 12);
+  assert.equal(resolved.text, "1 year");
   assert.equal(net.calls.length, 0);
 });
 

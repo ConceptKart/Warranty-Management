@@ -1,6 +1,7 @@
 /**
  * Warranty months for portal verify:
- * amazon_sku_mapping → bl_products.warranty → BaseLinker extra_field_1281.
+ * amazon_sku_mapping → bl_products.warranty → products.warranty_period_months
+ * → BaseLinker extra_field_1281.
  * Live BL hits are written back so bl_products.warranty stays filled.
  */
 
@@ -56,7 +57,7 @@ export function monthsToWarrantyText(months: number) {
 export type ResolvedWarranty = {
   months: number;
   text: string | null;
-  source: "mapping" | "bl_products" | "mapping_sku" | "baselinker" | "none";
+  source: "mapping" | "bl_products" | "mapping_sku" | "products" | "baselinker" | "none";
 };
 
 export async function persistBlProductWarranty(
@@ -258,6 +259,36 @@ async function lookupBlProductId(sku: string): Promise<string | null> {
   return id != null && Number(id) !== 0 ? String(id) : null;
 }
 
+async function lookupProductsTableWarranty(sku: string): Promise<number> {
+  const key = sku.trim();
+  const compact = compactSku(key);
+  if (!key) return 0;
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{ warranty_period_months: number | string | null }>
+    >`
+      SELECT warranty_period_months
+      FROM products
+      WHERE product_sku IS NOT NULL
+        AND TRIM(product_sku) != ''
+        AND warranty_period_months IS NOT NULL
+        AND warranty_period_months > 0
+        AND (
+          CONVERT(TRIM(product_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(product_sku)), ' ', ''), '-', ''), '_', '')
+            = ${compact}
+        )
+      ORDER BY warranty_period_months DESC
+      LIMIT 1
+    `;
+    return Number(rows[0]?.warranty_period_months ?? 0);
+  } catch (error) {
+    console.error("[lookupProductsTableWarranty]", error);
+    return 0;
+  }
+}
+
 async function lookupMappingWarrantyBySku(sku: string): Promise<number> {
   const key = sku.trim();
   const compact = compactSku(key);
@@ -335,6 +366,14 @@ export async function resolveProductWarranty(input: {
     const text = monthsToWarrantyText(skuMapped);
     if (text) await persistBlProductWarranty(sku, text);
     return { months: skuMapped, text, source: "mapping_sku" };
+  }
+
+  const catalogMonths = await lookupProductsTableWarranty(sku);
+  if (catalogMonths > 0) {
+    const text = monthsToWarrantyText(catalogMonths);
+    if (text) await persistBlProductWarranty(sku, text);
+    await persistMappingWarranty(sku, catalogMonths, catalogProductId, catalogVariantId);
+    return { months: catalogMonths, text, source: "products" };
   }
 
   const storedBlId = bl?.product_id || (await lookupBlProductId(sku));
