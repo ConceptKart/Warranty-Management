@@ -159,23 +159,28 @@ async function lookupMappingWarrantyBySku(sku: string): Promise<number> {
   const key = sku.trim();
   const compact = compactSku(key);
   if (!key) return 0;
-  const rows = await prisma.$queryRaw<Array<{ warranty_given: number | null }>>`
-    SELECT warranty_given
-    FROM amazon_sku_mapping
-    WHERE sku IS NOT NULL
-      AND TRIM(sku) != ''
-      AND warranty_given IS NOT NULL
-      AND warranty_given > 0
-      AND (
-        CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
-        OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
-          = ${compact}
-      )
-    ORDER BY warranty_given DESC
-    LIMIT 1
-  `;
-  return Number(rows[0]?.warranty_given ?? 0);
+  try {
+    const rows = await prisma.$queryRaw<Array<{ warranty_given: number | null }>>`
+      SELECT warranty_given
+      FROM amazon_sku_mapping
+      WHERE base_sku IS NOT NULL
+        AND TRIM(base_sku) != ''
+        AND warranty_given IS NOT NULL
+        AND warranty_given > 0
+        AND (
+          CONVERT(TRIM(base_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(base_sku)), ' ', ''), '-', ''), '_', '')
+            = ${compact}
+        )
+      ORDER BY warranty_given DESC
+      LIMIT 1
+    `;
+    return Number(rows[0]?.warranty_given ?? 0);
+  } catch (error) {
+    console.error("[lookupMappingWarrantyBySku]", error);
+    return 0;
+  }
 }
 
 /**

@@ -109,9 +109,13 @@ test("resolve matches bl_products.warranty with compacted SKU", async () => {
   assert.equal(net.calls.length, 0);
 });
 
-test("resolve uses amazon_sku_mapping by SKU when catalog warranty is empty", async () => {
+test("resolve uses amazon_sku_mapping.base_sku when catalog warranty is empty", async () => {
   setQueryRaw(async (sql) => {
-    if (sql.includes("FROM amazon_sku_mapping")) return [{ warranty_given: 24 }];
+    if (sql.includes("FROM amazon_sku_mapping")) {
+      assert.ok(sql.includes("base_sku"));
+      assert.ok(!sql.includes("TRIM(sku)"));
+      return [{ warranty_given: 24 }];
+    }
     return [];
   });
   const resolved = await resolveProductWarranty({ sku: "MAP-SKU" });
@@ -119,6 +123,57 @@ test("resolve uses amazon_sku_mapping by SKU when catalog warranty is empty", as
   assert.equal(resolved.months, 24);
   assert.equal(resolved.text, "2 years");
   assert.ok(calls.some((c) => c.kind === "executeRaw"));
+});
+
+test("resolve continues when mapping-by-SKU query fails", async () => {
+  setQueryRaw(async (sql) => {
+    if (sql.includes("FROM amazon_sku_mapping")) {
+      throw new Error("Unknown column 'sku' in 'WHERE'");
+    }
+    return [];
+  });
+  net.respondWith(() =>
+    jsonResponse({ status: "ERROR", error_code: "TIMEOUT", error_message: "down" }),
+  );
+  const resolved = await resolveProductWarranty({ sku: "CK/EARPHONECASE/Pck-1/BLACKCASE" });
+  assert.equal(resolved.source, "none");
+  assert.equal(resolved.months, 0);
+});
+
+test("Shopify verify still succeeds when mapping months are 0 and mapping-by-SKU fails", async () => {
+  setQueryRaw(async (sql) => {
+    if (sql.includes("FROM amazon_sku_mapping")) {
+      throw new Error("Unknown column 'sku' in 'WHERE'");
+    }
+    return dispatchSql(sql, {
+      orderRows: [
+        {
+          shopify_order_id: "#CK290897",
+          order_date: new Date("2026-08-15T20:15:48Z"),
+          product_id: 0,
+          variant_id: 0,
+          sku: "CK/EARPHONECASE/Pck-1/BLACKCASE",
+          qty: 1,
+          customer_name: "Test Customer",
+          phone_number: "9999999999",
+          email: "t@example.com",
+          customer_address: "addr",
+          city: "city",
+          state: "state",
+          pincode: "000000",
+          v_warranty: null,
+          p_warranty: null,
+        },
+      ],
+    });
+  });
+  net.respondWith(() =>
+    jsonResponse({ status: "ERROR", error_code: "TIMEOUT", error_message: "down" }),
+  );
+
+  const result = await verifyOrder("#CK290897", "website");
+  assert.equal(result.success, true);
+  assert.equal(result.products[0].sku, "CK/EARPHONECASE/Pck-1/BLACKCASE");
 });
 
 test("resolve falls back to BaseLinker extra_field_1281 and writes it back", async () => {
