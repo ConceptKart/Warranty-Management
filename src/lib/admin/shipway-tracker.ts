@@ -116,21 +116,74 @@ function normalizeStatus(status: string) {
   return map[key] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function getStatusFromOrder(order: Record<string, unknown>) {
+function getRawStatusFromOrder(order: Record<string, unknown>): string | null {
   const statusFields = [
     "current_shipment_status",
     "shipment_status",
-    "status",
-    "order_status",
     "tracking_status",
+    "order_status",
+    "status",
   ];
   for (const field of statusFields) {
     const value = order[field];
-    if (typeof value === "string" && value.trim()) {
-      return normalizeStatus(value);
-    }
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    // Shipway order codes like "A" / "Q" are not shipment statuses.
+    if (!trimmed || trimmed.length <= 2) continue;
+    return trimmed;
   }
-  return "Unknown";
+  return null;
+}
+
+function getStatusFromOrder(order: Record<string, unknown>) {
+  const raw = getRawStatusFromOrder(order);
+  return raw ? normalizeStatus(raw) : "Unknown";
+}
+
+export type ShipwayLiveAwbStatus = {
+  status: string;
+  courier: string | null;
+};
+
+/**
+ * Targeted live lookup for ticket tracking when the Shipway replica misses an AWB.
+ * Does not scan unfiltered order dumps.
+ */
+export async function fetchShipwayLiveAwbStatus(
+  awb: string,
+): Promise<ShipwayLiveAwbStatus | null> {
+  const trimmed = awb.trim();
+  if (!trimmed) return null;
+
+  const config = await getShipwayConfig();
+  if (!config.api_key || !config.email) return null;
+
+  const queries: Array<{ endpoint: string; params: Record<string, string> }> = [
+    { endpoint: "tracking", params: { awb_numbers: trimmed } },
+    { endpoint: "getorders", params: { order_type: "R" } },
+    { endpoint: "orders", params: { tracking_number: trimmed } },
+  ];
+
+  for (const q of queries) {
+    const result = await makeApiCall(config, q.endpoint, q.params);
+    if (result.http_code !== 200 || !result.parsed_response) continue;
+    const orders = extractOrders(result.parsed_response);
+    let match = orders.find((order) => orderMatches(order, trimmed));
+    if (!match && q.endpoint === "tracking") {
+      const details = result.parsed_response.tracking_details;
+      if (details && typeof details === "object") {
+        match = details as Record<string, unknown>;
+      } else if (orders.length === 1) {
+        match = orders[0];
+      }
+    }
+    if (!match) continue;
+    const status = getRawStatusFromOrder(match);
+    if (!status) continue;
+    return { status, courier: getCourier(match) };
+  }
+
+  return null;
 }
 
 function extractOrders(data: Record<string, unknown>): Record<string, unknown>[] {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { lookupAwbStatusesFromExternal } from "@/lib/admin/external-shipment-sync";
 import { resetExternal, setExternalQuery } from "@/lib/db-external-shipway";
+import { installFetchStub, jsonResponse, setEnv } from "./helpers.mjs";
 
 beforeEach(() => {
   resetExternal();
@@ -84,4 +85,39 @@ test("forward DELIVERED stays forward", async () => {
   assert.equal(results["111"].display_status, "DELIVERED");
   assert.equal(results["111"].mapped_status, "delivered");
   assert.equal(results["111"].type, "forward");
+});
+
+test("falls back to Shipway API when replica has no AWB", async () => {
+  setExternalQuery(async () => []);
+  const restoreEnv = setEnv({
+    SHIPWAY_EMAIL: "ops@example.com",
+    SHIPWAY_API_KEY: "test-key",
+  });
+  const net = installFetchStub();
+  net.respondWith((url) => {
+    if (String(url).includes("awb_numbers=90692546814")) {
+      return jsonResponse({
+        orders: [
+          {
+            awb: "90692546814",
+            current_shipment_status: "RETURN DELIVERED",
+            courier: "Bluedart",
+          },
+        ],
+      });
+    }
+    return jsonResponse({ orders: [] });
+  });
+  try {
+    const results = await lookupAwbStatusesFromExternal(["90692546814"], {
+      persist: false,
+    });
+    assert.equal(results["90692546814"].display_status, "RETURN DELIVERED");
+    assert.equal(results["90692546814"].mapped_status, "return_delivered");
+    assert.equal(results["90692546814"].type, "reverse");
+    assert.equal(results["90692546814"].courier, "Bluedart");
+  } finally {
+    net.restore();
+    restoreEnv();
+  }
 });
