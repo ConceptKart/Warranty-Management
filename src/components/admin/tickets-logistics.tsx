@@ -820,6 +820,9 @@ export function TicketsLogistics({
                   <th>Type</th>
                   <th>Forward AWB</th>
                   <th>Created</th>
+                  <th>Replacement EAN</th>
+                  <th>Storage Location</th>
+                  <th>AWB Created By</th>
                   <th>Status</th>
                   <th>Handover</th>
                   <th></th>
@@ -828,7 +831,7 @@ export function TicketsLogistics({
               <tbody>
                 {packerOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted py-4">
+                    <td colSpan={10} className="text-center text-muted py-4">
                       {packerError
                         ? packerError
                         : "No forward AWB orders found"}
@@ -855,6 +858,27 @@ export function TicketsLogistics({
                         {o.awb_created_at
                           ? formatRequestDate(o.awb_created_at)
                           : "—"}
+                      </td>
+                      <td>
+                        {o.replacement_ean ? (
+                          <code>{o.replacement_ean}</code>
+                        ) : (
+                          <em className="text-muted">none</em>
+                        )}
+                      </td>
+                      <td>
+                        {o.replacement_location ? (
+                          <>
+                            <i className="fas fa-map-marker-alt me-1 text-danger" />
+                            {o.replacement_location}
+                          </>
+                        ) : (
+                          <em className="text-muted">—</em>
+                        )}
+                      </td>
+                      <td className="small text-muted">
+                        <i className="fas fa-user me-1" />
+                        {o.awb_created_by || "—"}
                       </td>
                       <td>
                         {o.handed_over_to ? (
