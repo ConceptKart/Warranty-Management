@@ -8,7 +8,9 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = await requireAdminPermission("update_pack_status");
+  // PHP tickets.php only requires a logged-in admin. Restricting this to
+  // update_pack_status hid the list for support/manager/operations.
+  const auth = await requireAdminPermission("view_all_tickets");
   if (!auth.ok) return auth.response;
   const { user } = auth;
 
@@ -25,21 +27,36 @@ export async function POST(request: Request) {
   const action = String(body.action ?? "").trim();
 
   if (action === "list" || action === "get_todays_forward_awb") {
-    const orders = await getTodaysForwardAwbOrders({
-      awbFilter: body.awb_filter,
-      dateFrom: body.date_from,
-      dateTo: body.date_to,
-    });
-    return NextResponse.json({
-      success: true,
-      orders,
-      debug: {
-        awb_filter: body.awb_filter ?? "",
-        date_from: body.date_from ?? null,
-        date_to: body.date_to ?? null,
-        count: orders.length,
-      },
-    });
+    try {
+      const orders = await getTodaysForwardAwbOrders({
+        awbFilter: body.awb_filter,
+        dateFrom: body.date_from,
+        dateTo: body.date_to,
+      });
+      return NextResponse.json({
+        success: true,
+        orders,
+        debug: {
+          awb_filter: body.awb_filter ?? "",
+          date_from: body.date_from ?? null,
+          date_to: body.date_to ?? null,
+          count: orders.length,
+        },
+      });
+    } catch (error) {
+      console.error("[packer-handover list]", error);
+      return NextResponse.json(
+        {
+          success: false,
+          orders: [],
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load packer handover orders",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   if (action === "mark" || action === "mark_handover") {

@@ -211,13 +211,24 @@ export async function getTodaysForwardAwbOrders(input: {
   const awbFilter = (input.awbFilter ?? "").trim();
   const dateFrom = input.dateFrom?.trim() || null;
   const dateTo = input.dateTo?.trim() || null;
-  const dateMin = dateFrom ? `${dateFrom} 00:00:00` : null;
-  const dateMax = dateTo ? `${dateTo} 23:59:59` : null;
   const awbLike = awbFilter ? `%${awbFilter}%` : null;
 
-  // Use raw SQL matching PHP subquery structure
-  const rows = await prisma.$queryRawUnsafe<PackerHandoverRow[]>(
-    `
+  const filters: Prisma.Sql[] = [];
+  if (dateFrom) {
+    filters.push(Prisma.sql`DATE(awb_created_at) >= ${dateFrom}`);
+  }
+  if (dateTo) {
+    filters.push(Prisma.sql`DATE(awb_created_at) <= ${dateTo}`);
+  }
+  if (awbLike) {
+    filters.push(Prisma.sql`forward_awb LIKE ${awbLike}`);
+  }
+  const extraWhere =
+    filters.length > 0
+      ? Prisma.sql`AND ${Prisma.join(filters, " AND ")}`
+      : Prisma.empty;
+
+  const rows = await prisma.$queryRaw<PackerHandoverRow[]>`
     SELECT
       ticket_id,
       ticket_number,
@@ -245,6 +256,9 @@ export async function getTodaysForwardAwbOrders(input: {
         COALESCE(
           (SELECT MIN(s_fwd.created_at) FROM shipments s_fwd
            WHERE s_fwd.ticket_id = wt.ticket_id AND s_fwd.shipment_type = 'forward'),
+          (SELECT MIN(tsh.changed_at) FROM ticket_status_history tsh
+           WHERE tsh.ticket_id = wt.ticket_id
+             AND tsh.change_reason = 'AWB Assignment'),
           wt.updated_at
         ) AS awb_created_at,
         (
@@ -284,19 +298,20 @@ export async function getTodaysForwardAwbOrders(input: {
         ) != ''
     ) AS sub
     WHERE 1=1
-      ${dateMin ? "AND awb_created_at >= ?" : ""}
-      ${dateMax ? "AND awb_created_at <= ?" : ""}
-      ${awbLike ? "AND forward_awb LIKE ?" : ""}
+    ${extraWhere}
     ORDER BY awb_created_at DESC
-    `,
-    ...[
-      ...(dateMin ? [dateMin] : []),
-      ...(dateMax ? [dateMax] : []),
-      ...(awbLike ? [awbLike] : []),
-    ],
-  );
+  `;
 
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    ticket_id: Number(row.ticket_id),
+    awb_created_at: row.awb_created_at
+      ? new Date(row.awb_created_at).toISOString()
+      : null,
+    handed_over_at: row.handed_over_at
+      ? new Date(row.handed_over_at).toISOString()
+      : null,
+  }));
 }
 
 /** Port of AdminController::markHandoverToPacker */

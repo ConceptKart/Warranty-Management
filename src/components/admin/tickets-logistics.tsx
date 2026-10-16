@@ -76,7 +76,9 @@ function formatRequestDate(value: Date | string | null) {
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+  }).format(new Date());
 }
 
 export function TicketsLogistics({
@@ -99,6 +101,7 @@ export function TicketsLogistics({
   const [packerOpen, setPackerOpen] = useState(false);
   const [packerLoading, setPackerLoading] = useState(false);
   const [packerOrders, setPackerOrders] = useState<PackerOrder[]>([]);
+  const [packerError, setPackerError] = useState("");
   const [awbFilter, setAwbFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
@@ -228,6 +231,7 @@ export function TicketsLogistics({
 
   async function loadPackerOrders() {
     setPackerLoading(true);
+    setPackerError("");
     try {
       const res = await fetch("/api/admin/tickets/packer-handover", {
         method: "POST",
@@ -240,7 +244,17 @@ export function TicketsLogistics({
         }),
       });
       const data = await res.json();
+      if (!res.ok || data.success === false) {
+        setPackerOrders([]);
+        setPackerError(
+          data.error || "Failed to load packer handover orders",
+        );
+        return;
+      }
       setPackerOrders(data.orders ?? []);
+    } catch {
+      setPackerOrders([]);
+      setPackerError("Failed to load packer handover orders");
     } finally {
       setPackerLoading(false);
     }
@@ -794,13 +808,19 @@ export function TicketsLogistics({
             </div>
           </div>
 
+          {packerError ? (
+            <div className="alert alert-danger py-2">{packerError}</div>
+          ) : null}
+
           <div className="table-responsive">
             <table className="table table-sm table-hover">
               <thead className="table-light">
                 <tr>
                   <th>Ticket / Order</th>
+                  <th>Type</th>
                   <th>Forward AWB</th>
                   <th>Created</th>
+                  <th>Status</th>
                   <th>Handover</th>
                   <th></th>
                 </tr>
@@ -808,8 +828,10 @@ export function TicketsLogistics({
               <tbody>
                 {packerOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center text-muted py-4">
-                      No forward AWB orders found
+                    <td colSpan={7} className="text-center text-muted py-4">
+                      {packerError
+                        ? packerError
+                        : "No forward AWB orders found"}
                     </td>
                   </tr>
                 ) : (
@@ -820,6 +842,11 @@ export function TicketsLogistics({
                         <div className="small text-muted">{o.ticket_number}</div>
                       </td>
                       <td>
+                        <span className="badge bg-secondary">
+                          {o.ticket_type || "—"}
+                        </span>
+                      </td>
+                      <td>
                         <span className="badge bg-success">
                           {o.forward_awb}
                         </span>
@@ -828,6 +855,15 @@ export function TicketsLogistics({
                         {o.awb_created_at
                           ? formatRequestDate(o.awb_created_at)
                           : "—"}
+                      </td>
+                      <td>
+                        {o.handed_over_to ? (
+                          <span className="badge bg-primary">Handed over</span>
+                        ) : (
+                          <span className="badge bg-warning text-dark">
+                            Pending
+                          </span>
+                        )}
                       </td>
                       <td className="small">
                         {o.handed_over_to ? (

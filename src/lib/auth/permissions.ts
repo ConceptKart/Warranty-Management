@@ -42,6 +42,8 @@ const ROLE_PERMISSIONS: Record<string, readonly AdminPermission[]> = {
     "view_internal_comments",
     "add_internal_comments",
     "assign_awb",
+    "view_shipment_info",
+    "update_pack_status",
     "import_shopify_orders",
   ],
   operations: [
