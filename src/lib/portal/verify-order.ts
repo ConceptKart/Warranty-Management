@@ -109,23 +109,28 @@ async function verifyAmazonOrder(amazonOrderId: string): Promise<VerifyResult> {
         aod.id, aod.amazon_order_id, aod.sku, aod.amazon_title, aod.order_date,
         aod.product_id AS aod_product_id,
         aod.variant_id AS aod_variant_id,
-        asm_v.warranty_given AS v_warranty,
-        asm_p.warranty_given AS p_warranty
+        (
+          SELECT asm_v.warranty_given
+          FROM amazon_sku_mapping asm_v
+          WHERE aod.variant_id IS NOT NULL
+            AND aod.variant_id != 0
+            AND asm_v.variant_id = CAST(aod.variant_id AS CHAR)
+          LIMIT 1
+        ) AS v_warranty,
+        (
+          SELECT asm_p.warranty_given
+          FROM amazon_sku_mapping asm_p
+          WHERE aod.product_id IS NOT NULL
+            AND aod.product_id != 0
+            AND asm_p.product_id = CAST(aod.product_id AS CHAR)
+            AND (
+              asm_p.variant_id IS NULL
+              OR asm_p.variant_id = '0'
+              OR asm_p.variant_id = ''
+            )
+          LIMIT 1
+        ) AS p_warranty
       FROM amazon_order_details aod
-      LEFT JOIN amazon_sku_mapping asm_v
-        ON aod.variant_id IS NOT NULL
-        AND aod.variant_id != 0
-        AND CONVERT(asm_v.variant_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(CAST(aod.variant_id AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      LEFT JOIN amazon_sku_mapping asm_p
-        ON aod.product_id IS NOT NULL
-        AND aod.product_id != 0
-        AND CONVERT(asm_p.product_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(CAST(aod.product_id AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-        AND (
-          asm_p.variant_id IS NULL
-          OR CONVERT(asm_p.variant_id USING utf8mb4) COLLATE utf8mb4_unicode_ci IN ('0', '')
-        )
       WHERE aod.amazon_order_id = ${amazonOrderId}
     `;
 
@@ -320,23 +325,28 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
     const orderItems = await prisma.$queryRaw<ItemRow[]>`
       SELECT so.shopify_order_id, so.order_date, so.product_id, so.variant_id, so.sku, so.qty,
              so.customer_name, so.phone_number, so.email, so.customer_address, so.city, so.state, so.pincode,
-             asm_v.warranty_given AS v_warranty,
-             asm_p.warranty_given AS p_warranty
+             (
+               SELECT asm_v.warranty_given
+               FROM amazon_sku_mapping asm_v
+               WHERE so.variant_id IS NOT NULL
+                 AND so.variant_id != 0
+                 AND asm_v.variant_id = CAST(so.variant_id AS CHAR)
+               LIMIT 1
+             ) AS v_warranty,
+             (
+               SELECT asm_p.warranty_given
+               FROM amazon_sku_mapping asm_p
+               WHERE so.product_id IS NOT NULL
+                 AND so.product_id != 0
+                 AND asm_p.product_id = CAST(so.product_id AS CHAR)
+                 AND (
+                   asm_p.variant_id IS NULL
+                   OR asm_p.variant_id = '0'
+                   OR asm_p.variant_id = ''
+                 )
+               LIMIT 1
+             ) AS p_warranty
       FROM shopify_orders so
-      LEFT JOIN amazon_sku_mapping asm_v
-        ON so.variant_id IS NOT NULL
-        AND so.variant_id != 0
-        AND CONVERT(asm_v.variant_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(CAST(so.variant_id AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      LEFT JOIN amazon_sku_mapping asm_p
-        ON so.product_id IS NOT NULL
-        AND so.product_id != 0
-        AND CONVERT(asm_p.product_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(CAST(so.product_id AS CHAR) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-        AND (
-          asm_p.variant_id IS NULL
-          OR CONVERT(asm_p.variant_id USING utf8mb4) COLLATE utf8mb4_unicode_ci IN ('0', '')
-        )
       WHERE so.shopify_order_id = ${shopifyOrderId}
          OR so.shopify_order_id = ${bareId}
          OR so.shopify_order_id = ${hashedId}

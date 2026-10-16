@@ -188,6 +188,27 @@ async function persistMappingWarranty(
   if (updated > 0) return;
 
   try {
+    const existing = await prisma.$queryRaw<Array<{ c: number | bigint }>>`
+      SELECT 1 AS c
+      FROM amazon_sku_mapping
+      WHERE (
+          base_sku IS NOT NULL
+          AND TRIM(base_sku) != ''
+          AND CONVERT(TRIM(base_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        )
+        OR (
+          product_id = ${productId ?? "0"}
+          AND variant_id = ${variantId}
+        )
+      LIMIT 1
+    `;
+    if (existing[0]) return;
+  } catch (error) {
+    console.error("[persistMappingWarranty] exists", error);
+  }
+
+  try {
     await prisma.$executeRaw`
       INSERT INTO amazon_sku_mapping (base_sku, variant_id, product_id, warranty_given)
       VALUES (${key}, ${variantId}, ${productId ?? "0"}, ${months})

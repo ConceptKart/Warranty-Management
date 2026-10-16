@@ -41,7 +41,11 @@ function dispatchSql(sql, state) {
   if (sql.includes("SELECT DISTINCT") && sql.includes("shopify_orders")) {
     return state.missingSkus ?? [];
   }
+  if (sql.includes("COUNT(*)")) return [{ c: BigInt(state.orderRows?.length ?? 0) }];
   if (sql.includes("FROM products")) return state.products ?? [];
+  if (sql.includes("FROM amazon_order_details") || sql.includes("FROM shopify_orders")) {
+    return state.orderRows ?? [];
+  }
   if (sql.includes("FROM amazon_sku_mapping")) return state.mapping ?? [];
   if (sql.includes("FROM bl_products") && sql.includes("warranty IS NOT NULL")) {
     return state.blWarranty ?? [];
@@ -51,10 +55,6 @@ function dispatchSql(sql, state) {
   }
   if (sql.includes("FROM bl_products") && sql.includes("product_id IS NOT NULL")) {
     return state.blIds ?? [];
-  }
-  if (sql.includes("COUNT(*)")) return [{ c: BigInt(state.orderRows?.length ?? 0) }];
-  if (sql.includes("FROM amazon_order_details") || sql.includes("FROM shopify_orders")) {
-    return state.orderRows ?? [];
   }
   return [];
 }
@@ -172,7 +172,10 @@ test("resolve continues when mapping-by-SKU query fails", async () => {
 
 test("Shopify verify still succeeds when mapping months are 0 and mapping-by-SKU fails", async () => {
   setQueryRaw(async (sql) => {
-    if (sql.includes("FROM amazon_sku_mapping")) {
+    if (
+      sql.includes("FROM amazon_sku_mapping") &&
+      !sql.includes("FROM shopify_orders")
+    ) {
       throw new Error("Unknown column 'sku' in 'WHERE'");
     }
     return dispatchSql(sql, {
