@@ -105,7 +105,10 @@ export function TicketsLogistics({
   const [awbFilter, setAwbFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
-  const [packerName, setPackerName] = useState("");
+  const [rowPackerNames, setRowPackerNames] = useState<Record<number, string>>(
+    {},
+  );
+  const [savingHandoverId, setSavingHandoverId] = useState<number | null>(null);
   const [statusMap, setStatusMap] = useState<
     Record<number, { forward?: string; reverse?: string }>
   >({});
@@ -261,27 +264,38 @@ export function TicketsLogistics({
   }
 
   async function markHandover(order: PackerOrder) {
-    if (!packerName.trim()) {
+    const packer = (rowPackerNames[order.ticket_id] ?? "").trim();
+    if (!packer) {
       alert("Enter packer name first");
       return;
     }
     if (!order.forward_awb) return;
-    const res = await fetch("/api/admin/tickets/packer-handover", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "mark",
-        ticket_id: order.ticket_id,
-        awb_number: order.forward_awb,
-        packer_name: packerName.trim(),
-      }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      alert(data.error ?? "Failed to mark handover");
-      return;
+    setSavingHandoverId(order.ticket_id);
+    try {
+      const res = await fetch("/api/admin/tickets/packer-handover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark",
+          ticket_id: order.ticket_id,
+          awb_number: order.forward_awb,
+          packer_name: packer,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error ?? "Failed to save handover");
+        return;
+      }
+      setRowPackerNames((prev) => {
+        const next = { ...prev };
+        delete next[order.ticket_id];
+        return next;
+      });
+      await loadPackerOrders();
+    } finally {
+      setSavingHandoverId(null);
     }
-    await loadPackerOrders();
   }
 
   async function submitChangeType() {
@@ -787,16 +801,7 @@ export function TicketsLogistics({
                 placeholder="Search AWB"
               />
             </div>
-            <div className="col-md-3">
-              <label className="form-label">Packer Name</label>
-              <input
-                className="form-control"
-                value={packerName}
-                onChange={(e) => setPackerName(e.target.value)}
-                placeholder="e.g. Ravi"
-              />
-            </div>
-            <div className="col-12">
+            <div className="col-md-3 d-flex align-items-end">
               <button
                 type="button"
                 className="btn btn-primary"
@@ -825,13 +830,12 @@ export function TicketsLogistics({
                   <th>AWB Created By</th>
                   <th>Status</th>
                   <th>Handover</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {packerOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center text-muted py-4">
+                    <td colSpan={9} className="text-center text-muted py-4">
                       {packerError
                         ? packerError
                         : "No forward AWB orders found"}
@@ -889,29 +893,50 @@ export function TicketsLogistics({
                           </span>
                         )}
                       </td>
-                      <td className="small">
+                      <td>
                         {o.handed_over_to ? (
                           <>
-                            {o.handed_over_to}
-                            <div className="text-muted">
+                            <div className="form-check mb-1">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked
+                                disabled
+                                readOnly
+                              />
+                            </div>
+                            <small className="text-muted">
+                              {o.handed_over_to}
+                              <br />
                               {o.handed_over_at
                                 ? formatRequestDate(o.handed_over_at)
                                 : ""}
-                            </div>
+                            </small>
                           </>
                         ) : (
-                          <span className="text-muted">Not handed over</span>
+                          <div className="input-group input-group-sm">
+                            <input
+                              type="text"
+                              className="form-control"
+                              placeholder="Packer name"
+                              value={rowPackerNames[o.ticket_id] ?? ""}
+                              onChange={(e) =>
+                                setRowPackerNames((prev) => ({
+                                  ...prev,
+                                  [o.ticket_id]: e.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={savingHandoverId === o.ticket_id}
+                              onClick={() => void markHandover(o)}
+                            >
+                              {savingHandoverId === o.ticket_id ? "..." : "Save"}
+                            </button>
+                          </div>
                         )}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-warning"
-                          disabled={Boolean(o.handed_over_to)}
-                          onClick={() => void markHandover(o)}
-                        >
-                          Mark Handover
-                        </button>
                       </td>
                     </tr>
                   ))
