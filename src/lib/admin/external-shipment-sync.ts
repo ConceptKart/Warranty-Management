@@ -51,6 +51,16 @@ const KNOWN_REVERSE = new Set([
 ]);
 const NEGLECTED_REVERSE = new Set(["RPSH", "ROOD"]);
 
+export function looksLikeReverseStatus(status: string | null | undefined) {
+  const normalized = (status ?? "").trim().toUpperCase();
+  if (!normalized) return false;
+  return (
+    normalized.startsWith("RETURN") ||
+    KNOWN_REVERSE.has(normalized) ||
+    NEGLECTED_REVERSE.has(normalized)
+  );
+}
+
 export function mapForwardStatus(status: string | null | undefined) {
   if (!status?.trim()) return "awb_assigned_forward";
   const normalized = status.trim().toUpperCase();
@@ -136,8 +146,73 @@ export async function lookupAwbStatusesFromExternal(
     : { syncLocalFromLookup: null };
 
   for (const awb of unique) {
-    if (forwardData[awb]) {
-      const record = forwardData[awb]!;
+    const forwardRecord = forwardData[awb];
+    const reverseRecord = reverseData[awb];
+    const ordersStatus = forwardRecord?.shipment_status ?? "";
+    const useReverse =
+      Boolean(reverseRecord) || looksLikeReverseStatus(ordersStatus);
+
+    if (useReverse) {
+      const externalStatus =
+        reverseRecord?.tracking_status?.trim() &&
+        reverseRecord.tracking_status.trim().toUpperCase() !== "NULL"
+          ? reverseRecord.tracking_status
+          : ordersStatus;
+      const normalized = externalStatus?.trim().toUpperCase() ?? "";
+      const rmaStatus = reverseRecord?.status ?? null;
+      let displayStatus = "N/A";
+      let needsAction = false;
+      let mappedStatus: string | null = null;
+
+      if (!externalStatus?.trim() || normalized === "NULL") {
+        displayStatus = "N/A";
+      } else if (NEGLECTED_REVERSE.has(normalized)) {
+        displayStatus = "N/A";
+        needsAction = true;
+      } else if (KNOWN_REVERSE.has(normalized) || normalized.startsWith("RETURN")) {
+        displayStatus = normalized;
+        mappedStatus = mapReverseStatus(externalStatus, rmaStatus);
+        if (!REVERSE_MAPPINGS[normalized] && normalized.startsWith("RETURN")) {
+          mappedStatus = "return_in_transit";
+        }
+      } else {
+        displayStatus = normalized;
+        mappedStatus = mapReverseStatus(externalStatus, rmaStatus);
+        needsAction = mappedStatus === "pending";
+      }
+
+      results[awb] = {
+        display_status: displayStatus,
+        mapped_status: mappedStatus,
+        type: "reverse",
+        courier: reverseRecord?.carrier ?? forwardRecord?.courier_name ?? "",
+        last_updated: reverseRecord?.state_updated_at
+          ? String(reverseRecord.state_updated_at)
+          : forwardRecord?.updated_at
+            ? String(forwardRecord.updated_at)
+            : null,
+        needs_action: needsAction,
+        raw_status: externalStatus,
+      };
+
+      if (persist && mappedStatus && syncLocalFromLookup) {
+        await syncLocalFromLookup(
+          awb,
+          "reverse",
+          externalStatus ?? "",
+          mappedStatus,
+          reverseRecord?.state_updated_at
+            ? String(reverseRecord.state_updated_at)
+            : forwardRecord?.updated_at
+              ? String(forwardRecord.updated_at)
+              : nowSqlFallback(),
+        );
+      }
+      continue;
+    }
+
+    if (forwardRecord) {
+      const record = forwardRecord;
       const externalStatus = record.shipment_status ?? "";
       const normalized = externalStatus.trim().toUpperCase();
       let displayStatus = "N/A";
@@ -150,7 +225,8 @@ export async function lookupAwbStatusesFromExternal(
         displayStatus = normalized;
         mappedStatus = mapForwardStatus(externalStatus);
       } else {
-        displayStatus = "N/A";
+        displayStatus = normalized;
+        mappedStatus = mapForwardStatus(externalStatus);
         needsAction = true;
       }
 
@@ -173,62 +249,18 @@ export async function lookupAwbStatusesFromExternal(
           record.updated_at ? String(record.updated_at) : null,
         );
       }
-    } else if (reverseData[awb]) {
-      const record = reverseData[awb]!;
-      const externalStatus = record.tracking_status;
-      const normalized = externalStatus?.trim().toUpperCase() ?? "";
-      const rmaStatus = record.status;
-      let displayStatus = "N/A";
-      let needsAction = false;
-      let mappedStatus: string | null = null;
-
-      if (!externalStatus?.trim() || normalized === "NULL") {
-        displayStatus = "N/A";
-      } else if (NEGLECTED_REVERSE.has(normalized)) {
-        displayStatus = "N/A";
-        needsAction = true;
-      } else if (KNOWN_REVERSE.has(normalized)) {
-        displayStatus = normalized;
-        mappedStatus = mapReverseStatus(externalStatus, rmaStatus);
-      } else {
-        displayStatus = "N/A";
-        needsAction = true;
-      }
-
-      results[awb] = {
-        display_status: displayStatus,
-        mapped_status: mappedStatus,
-        type: "reverse",
-        courier: record.carrier ?? "",
-        last_updated: record.state_updated_at
-          ? String(record.state_updated_at)
-          : null,
-        needs_action: needsAction,
-        raw_status: externalStatus,
-      };
-
-      if (persist && mappedStatus && syncLocalFromLookup) {
-        await syncLocalFromLookup(
-          awb,
-          "reverse",
-          externalStatus ?? "",
-          mappedStatus,
-          record.state_updated_at
-            ? String(record.state_updated_at)
-            : nowSqlFallback(),
-        );
-      }
-    } else {
-      results[awb] = {
-        display_status: "N/A",
-        mapped_status: null,
-        type: null,
-        courier: null,
-        last_updated: null,
-        needs_action: false,
-        raw_status: null,
-      };
+      continue;
     }
+
+    results[awb] = {
+      display_status: "N/A",
+      mapped_status: null,
+      type: null,
+      courier: null,
+      last_updated: null,
+      needs_action: false,
+      raw_status: null,
+    };
   }
 
   return results;
