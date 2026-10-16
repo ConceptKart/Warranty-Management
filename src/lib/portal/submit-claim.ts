@@ -458,6 +458,12 @@ async function resolveSequentialOrderNumber(
   };
 }
 
+/** Empty → SQL NULL so COALESCE keeps the column. Avoids NULLIF collation 1267. */
+function nullIfEmpty(value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed : null;
+}
+
 async function upsertCustomer(input: {
   email: string;
   name: string;
@@ -471,9 +477,9 @@ async function upsertCustomer(input: {
   if (customerId) {
     await prisma.$executeRaw`
       UPDATE customers SET
-        first_name = COALESCE(NULLIF(${input.name}, ''), first_name),
-        phone = COALESCE(NULLIF(${input.phone}, ''), phone),
-        address = COALESCE(NULLIF(${input.address}, ''), address),
+        first_name = COALESCE(${nullIfEmpty(input.name)}, first_name),
+        phone = COALESCE(${nullIfEmpty(input.phone)}, phone),
+        address = COALESCE(${nullIfEmpty(input.address)}, address),
         updated_at = NOW()
       WHERE customer_id = ${customerId}
     `;
@@ -714,9 +720,9 @@ export async function submitPortalClaim(
           if (linkedCustomerId && linkedCustomerId !== customerId) {
             await prisma.$executeRaw`
               UPDATE customers SET
-                first_name = COALESCE(NULLIF(${customerName}, ''), first_name),
-                phone = COALESCE(NULLIF(${customerPhone}, ''), phone),
-                address = COALESCE(NULLIF(${shippingAddress}, ''), address),
+                first_name = COALESCE(${nullIfEmpty(customerName)}, first_name),
+                phone = COALESCE(${nullIfEmpty(customerPhone)}, phone),
+                address = COALESCE(${nullIfEmpty(shippingAddress)}, address),
                 updated_at = NOW()
               WHERE customer_id = ${linkedCustomerId}
             `;
