@@ -418,6 +418,16 @@ const collection = {
         { cron: true },
       ),
       item(
+        "Backfill warranty",
+        "GET",
+        "/api/cron/backfill-warranty?limit=200&dry_run=1",
+        {
+          cron: true,
+          description:
+            "Fill empty bl_products.warranty from BaseLinker extra_field_1281. Also upserts missing order SKUs. Drop dry_run to write.",
+        },
+      ),
+      item(
         "Sync shipments (changed)",
         "GET",
         "/api/cron/sync-shipments?mode=changed",

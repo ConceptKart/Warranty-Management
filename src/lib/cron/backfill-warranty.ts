@@ -1,15 +1,21 @@
 /**
  * Fill empty bl_products.warranty from live BaseLinker extra_field_1281.
+ * Also upserts catalog + mapping for order SKUs that were never imported.
  */
 
-import { fetchBaselinkerWarrantyForProductIds } from "@/lib/baselinker/warranty-field";
+import {
+  fetchBaselinkerWarranty,
+  fetchBaselinkerWarrantyForProductIds,
+} from "@/lib/baselinker/warranty-field";
 import { prisma } from "@/lib/db";
 import {
   parseWarrantyMonths,
   persistBlProductWarrantyByProductId,
+  resolveProductWarranty,
 } from "@/lib/portal/product-warranty";
 
 const BATCH_SIZE = 50;
+const ORDER_SKU_LIMIT = 50;
 
 export type BackfillWarrantyResult = {
   scanned: number;
@@ -65,6 +71,54 @@ export async function backfillProductWarranties(options?: {
         await persistBlProductWarrantyByProductId(id, text);
       }
       result.filled += 1;
+    }
+  }
+
+  const skuLimit = Math.min(limit, ORDER_SKU_LIMIT);
+  const missingSkus = await prisma.$queryRaw<
+    Array<{
+      sku: string;
+      product_id: bigint | number | string | null;
+      variant_id: bigint | number | string | null;
+    }>
+  >`
+    SELECT DISTINCT so.sku AS sku, so.product_id AS product_id, so.variant_id AS variant_id
+    FROM shopify_orders so
+    WHERE so.sku IS NOT NULL
+      AND TRIM(so.sku) != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM bl_products bp
+        WHERE bp.sku IS NOT NULL
+          AND bp.warranty IS NOT NULL
+          AND bp.warranty != ''
+          AND TRIM(bp.sku) = TRIM(so.sku)
+      )
+    LIMIT ${skuLimit}
+  `;
+
+  result.scanned += missingSkus.length;
+
+  for (const row of missingSkus) {
+    const sku = String(row.sku ?? "").trim();
+    if (!sku) {
+      result.skipped += 1;
+      continue;
+    }
+    if (dryRun) {
+      const live = await fetchBaselinkerWarranty({ sku });
+      if (parseWarrantyMonths(live.text) > 0) result.filled += 1;
+      else result.skipped += 1;
+      continue;
+    }
+    const resolved = await resolveProductWarranty({
+      sku,
+      catalogProductId: row.product_id,
+      catalogVariantId: row.variant_id,
+    });
+    if (resolved.months > 0 && resolved.source === "baselinker") {
+      result.filled += 1;
+    } else {
+      result.skipped += 1;
     }
   }
 

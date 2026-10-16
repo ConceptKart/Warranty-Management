@@ -38,6 +38,9 @@ function blApi(catalog, list = {}) {
 }
 
 function dispatchSql(sql, state) {
+  if (sql.includes("SELECT DISTINCT") && sql.includes("shopify_orders")) {
+    return state.missingSkus ?? [];
+  }
   if (sql.includes("FROM amazon_sku_mapping")) return state.mapping ?? [];
   if (sql.includes("FROM bl_products") && sql.includes("warranty IS NOT NULL")) {
     return state.blWarranty ?? [];
@@ -283,6 +286,40 @@ test("Amazon verify uses live warranty months without defaulting to 12", async (
   assert.equal(result.products[0].warranty_status, "active");
 });
 
+test("resolve falls back to BaseLinker SKU search when catalog product_id is not a BL id", async () => {
+  setExecuteRaw(async (sql) => (sql.includes("INSERT") ? 1 : 0));
+  setQueryRaw(async () => []);
+  net.respondWith(
+    blApi(
+      {
+        999001: {
+          sku: "COZOY-D1-IEM-Blu-Mic-3.5",
+          text_fields: { extra_field_1281: "1 year" },
+        },
+      },
+      { 999001: { sku: "COZOY-D1-IEM-Blu-Mic-3.5" } },
+    ),
+  );
+
+  const resolved = await resolveProductWarranty({
+    sku: "COZOY-D1-IEM-Blu-Mic-3.5",
+    catalogProductId: 13078459,
+  });
+  assert.equal(resolved.source, "baselinker");
+  assert.equal(resolved.months, 12);
+  assert.ok(
+    calls.some((c) => c.kind === "executeRaw" && c.sql.includes("INSERT INTO bl_products")),
+  );
+  assert.ok(
+    calls.some(
+      (c) =>
+        c.kind === "executeRaw" &&
+        c.sql.includes("INSERT INTO amazon_sku_mapping") &&
+        c.sql.includes("base_sku"),
+    ),
+  );
+});
+
 test("backfill writes extra_field_1281 onto empty bl_products rows", async () => {
   setQueryRaw(async (sql) =>
     dispatchSql(sql, {
@@ -310,5 +347,37 @@ test("backfill writes extra_field_1281 onto empty bl_products rows", async () =>
         c.sql.includes("UPDATE bl_products") &&
         c.values.includes("12 months"),
     ),
+  );
+});
+
+test("backfill upserts warranty for order SKUs missing from bl_products", async () => {
+  setExecuteRaw(async (sql) => (sql.includes("INSERT") ? 1 : 0));
+  setQueryRaw(async (sql) =>
+    dispatchSql(sql, {
+      missingSkus: [
+        {
+          sku: "COZOY-D1-IEM-Blu-Mic-3.5",
+          product_id: 13078459,
+          variant_id: 0,
+        },
+      ],
+    }),
+  );
+  net.respondWith(
+    blApi(
+      {
+        999001: {
+          sku: "COZOY-D1-IEM-Blu-Mic-3.5",
+          text_fields: { extra_field_1281: "1 year" },
+        },
+      },
+      { 999001: { sku: "COZOY-D1-IEM-Blu-Mic-3.5" } },
+    ),
+  );
+
+  const result = await backfillProductWarranties({ limit: 10, dryRun: false });
+  assert.equal(result.filled, 1);
+  assert.ok(
+    calls.some((c) => c.kind === "executeRaw" && c.sql.includes("INSERT INTO bl_products")),
   );
 });

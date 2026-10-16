@@ -1812,6 +1812,45 @@
           "response": []
         },
         {
+          "name": "Backfill warranty",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-cron-secret",
+                "value": "{{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/backfill-warranty?limit=200&dry_run=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "backfill-warranty"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200"
+                },
+                {
+                  "key": "dry_run",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Fill empty bl_products.warranty from BaseLinker extra_field_1281. Also upserts missing order SKUs. Drop dry_run to write."
+          },
+          "response": []
+        },
+        {
           "name": "Sync shipments (changed)",
           "request": {
             "method": "GET",

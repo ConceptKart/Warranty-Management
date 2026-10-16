@@ -73,17 +73,36 @@ async function findProductIdBySku(
   return null;
 }
 
+export type LiveBaselinkerWarranty = {
+  text: string | null;
+  productId: string | null;
+};
+
+async function loadProduct(
+  inventoryId: number,
+  productId: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const details = await getProductsData(inventoryId, [productId]);
+    return details[productId] ?? null;
+  } catch (error) {
+    console.error("[loadProduct]", error);
+    return null;
+  }
+}
+
 /**
- * Returns the BaseLinker warranty text, or null if missing / "no warranty".
+ * Live BaseLinker warranty. If a stored product_id is not a BL id
+ * (Shopify/Amazon catalog ids), falls back to SKU search.
  * Never throws — portal verify must still succeed if BaseLinker is down.
  */
-export async function fetchBaselinkerWarrantyText(input: {
+export async function fetchBaselinkerWarranty(input: {
   sku: string;
   productId?: string | number | null;
-}): Promise<string | null> {
+}): Promise<LiveBaselinkerWarranty> {
   const sku = input.sku.trim();
   if (!sku && (input.productId == null || input.productId === "" || Number(input.productId) === 0)) {
-    return null;
+    return { text: null, productId: null };
   }
 
   try {
@@ -92,14 +111,16 @@ export async function fetchBaselinkerWarrantyText(input: {
       input.productId != null && String(input.productId).trim() && Number(input.productId) !== 0
         ? String(input.productId)
         : null;
-    if (!productId && sku) {
-      productId = await findProductIdBySku(sku, inventoryId);
-    }
-    if (!productId) return null;
 
-    const details = await getProductsData(inventoryId, [productId]);
-    const product = details[productId];
-    if (!product) return null;
+    let product = productId ? await loadProduct(inventoryId, productId) : null;
+    if (!product && sku) {
+      const bySku = await findProductIdBySku(sku, inventoryId);
+      if (bySku) {
+        productId = bySku;
+        product = await loadProduct(inventoryId, bySku);
+      }
+    }
+    if (!product || !productId) return { text: null, productId: productId };
 
     const parentId = product.parent_id ?? product.parent_product_id;
     if (parentId != null && String(parentId).trim() && Number(parentId) !== 0) {
@@ -107,16 +128,26 @@ export async function fetchBaselinkerWarrantyText(input: {
       const parentText = textFromFields(
         parentMap[String(parentId)]?.text_fields,
       );
-      if (parentText && !indicatesNoWarranty(parentText)) return parentText;
+      if (parentText && !indicatesNoWarranty(parentText)) {
+        return { text: parentText, productId };
+      }
     }
 
     const own = textFromFields(product.text_fields);
-    if (!own || indicatesNoWarranty(own)) return null;
-    return own;
+    if (!own || indicatesNoWarranty(own)) return { text: null, productId };
+    return { text: own, productId };
   } catch (error) {
-    console.error("[fetchBaselinkerWarrantyText]", error);
-    return null;
+    console.error("[fetchBaselinkerWarranty]", error);
+    return { text: null, productId: null };
   }
+}
+
+export async function fetchBaselinkerWarrantyText(input: {
+  sku: string;
+  productId?: string | number | null;
+}): Promise<string | null> {
+  const live = await fetchBaselinkerWarranty(input);
+  return live.text;
 }
 
 export async function fetchBaselinkerWarrantyForProductIds(

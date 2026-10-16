@@ -5,8 +5,16 @@
  */
 
 import { prisma } from "@/lib/db";
-import { fetchBaselinkerWarrantyText } from "@/lib/baselinker/warranty-field";
+import { fetchBaselinkerWarranty } from "@/lib/baselinker/warranty-field";
 import { compactSku, indicatesNoWarranty } from "@/lib/portal/sku-normalize";
+
+function inventoryId() {
+  return Number(process.env.BASELINKER_INVENTORY_ID?.trim() || "392");
+}
+
+async function affectedRows(result: unknown) {
+  return Number(result ?? 0);
+}
 
 export { compactSku, indicatesNoWarranty };
 
@@ -51,26 +59,51 @@ export type ResolvedWarranty = {
   source: "mapping" | "bl_products" | "mapping_sku" | "baselinker" | "none";
 };
 
-export async function persistBlProductWarranty(sku: string, warrantyText: string) {
+export async function persistBlProductWarranty(
+  sku: string,
+  warrantyText: string,
+  productId?: string | null,
+) {
   const key = sku.trim();
   const compact = compactSku(key);
-  if (!key || !warrantyText.trim()) return;
+  const text = warrantyText.trim();
+  if (!key || !text) return;
+  let updated = 0;
+  try {
+    updated = await affectedRows(
+      await prisma.$executeRaw`
+        UPDATE bl_products
+        SET warranty = ${text}
+        WHERE (warranty IS NULL OR warranty = '')
+          AND sku IS NOT NULL
+          AND sku != ''
+          AND (
+            CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
+              = ${compact}
+          )
+      `,
+    );
+  } catch (error) {
+    console.error("[persistBlProductWarranty] update", error);
+  }
+  if (updated > 0) return;
+
+  const blId =
+    productId != null && String(productId).trim() && Number(productId) !== 0
+      ? String(productId).trim()
+      : null;
   try {
     await prisma.$executeRaw`
-      UPDATE bl_products
-      SET warranty = ${warrantyText.trim()}
-      WHERE (warranty IS NULL OR warranty = '')
-        AND sku IS NOT NULL
-        AND sku != ''
-        AND (
-          CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-            = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
-            = ${compact}
-        )
+      INSERT INTO bl_products (
+        product_id, parent_id, sku, is_variant, inventory_id, synced_at, warranty
+      ) VALUES (
+        ${blId}, 0, ${key}, 0, ${inventoryId()}, NOW(), ${text}
+      )
     `;
   } catch (error) {
-    console.error("[persistBlProductWarranty]", error);
+    console.error("[persistBlProductWarranty] insert", error);
   }
 }
 
@@ -90,6 +123,76 @@ export async function persistBlProductWarrantyByProductId(
     `;
   } catch (error) {
     console.error("[persistBlProductWarrantyByProductId]", error);
+  }
+}
+
+async function persistMappingWarranty(
+  sku: string,
+  months: number,
+  catalogProductId?: string | null,
+  catalogVariantId?: string | null,
+) {
+  const key = sku.trim();
+  const compact = compactSku(key);
+  if (!key || months <= 0) return;
+  const productId =
+    catalogProductId != null && String(catalogProductId).trim() && Number(catalogProductId) !== 0
+      ? String(catalogProductId).trim()
+      : null;
+  const variantId =
+    catalogVariantId != null && String(catalogVariantId).trim() && Number(catalogVariantId) !== 0
+      ? String(catalogVariantId).trim()
+      : "0";
+
+  let updated = 0;
+  try {
+    updated = await affectedRows(
+      productId
+        ? await prisma.$executeRaw`
+            UPDATE amazon_sku_mapping
+            SET warranty_given = ${months}
+            WHERE (warranty_given IS NULL OR warranty_given = 0)
+              AND (
+                (
+                  base_sku IS NOT NULL
+                  AND TRIM(base_sku) != ''
+                  AND (
+                    CONVERT(TRIM(base_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                      = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(base_sku)), ' ', ''), '-', ''), '_', '')
+                      = ${compact}
+                  )
+                )
+                OR CONVERT(product_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  = CONVERT(${productId} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              )
+          `
+        : await prisma.$executeRaw`
+            UPDATE amazon_sku_mapping
+            SET warranty_given = ${months}
+            WHERE (warranty_given IS NULL OR warranty_given = 0)
+              AND base_sku IS NOT NULL
+              AND TRIM(base_sku) != ''
+              AND (
+                CONVERT(TRIM(base_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(base_sku)), ' ', ''), '-', ''), '_', '')
+                  = ${compact}
+              )
+          `,
+    );
+  } catch (error) {
+    console.error("[persistMappingWarranty] update", error);
+  }
+  if (updated > 0) return;
+
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO amazon_sku_mapping (base_sku, variant_id, product_id, warranty_given)
+      VALUES (${key}, ${variantId}, ${productId ?? "0"}, ${months})
+    `;
+  } catch (error) {
+    console.error("[persistMappingWarranty] insert", error);
   }
 }
 
@@ -189,9 +292,19 @@ async function lookupMappingWarrantyBySku(sku: string): Promise<number> {
 export async function resolveProductWarranty(input: {
   sku: string;
   mappingMonths?: number;
+  catalogProductId?: string | number | null;
+  catalogVariantId?: string | number | null;
 }): Promise<ResolvedWarranty> {
   const sku = input.sku.trim();
   const mappingMonths = Number(input.mappingMonths ?? 0);
+  const catalogProductId =
+    input.catalogProductId != null && Number(input.catalogProductId) !== 0
+      ? String(input.catalogProductId)
+      : null;
+  const catalogVariantId =
+    input.catalogVariantId != null && Number(input.catalogVariantId) !== 0
+      ? String(input.catalogVariantId)
+      : null;
   if (mappingMonths > 0) {
     const text = monthsToWarrantyText(mappingMonths);
     if (text && sku) await persistBlProductWarranty(sku, text);
@@ -224,12 +337,17 @@ export async function resolveProductWarranty(input: {
     return { months: skuMapped, text, source: "mapping_sku" };
   }
 
-  const productId = bl?.product_id || (await lookupBlProductId(sku));
-  const liveText = await fetchBaselinkerWarrantyText({ sku, productId });
+  const storedBlId = bl?.product_id || (await lookupBlProductId(sku));
+  const live = await fetchBaselinkerWarranty({
+    sku,
+    productId: storedBlId || catalogProductId,
+  });
+  const liveText = live.text;
   const liveMonths = parseWarrantyMonths(liveText);
   if (liveMonths > 0 && liveText) {
-    await persistBlProductWarranty(sku, liveText);
-    if (productId) await persistBlProductWarrantyByProductId(productId, liveText);
+    await persistBlProductWarranty(sku, liveText, live.productId);
+    if (live.productId) await persistBlProductWarrantyByProductId(live.productId, liveText);
+    await persistMappingWarranty(sku, liveMonths, catalogProductId, catalogVariantId);
     return { months: liveMonths, text: liveText, source: "baselinker" };
   }
 

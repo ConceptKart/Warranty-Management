@@ -158,7 +158,12 @@ async function verifyAmazonOrder(amazonOrderId: string): Promise<VerifyResult> {
         }
       }
 
-      const resolved = await resolveProductWarranty({ sku, mappingMonths: warrantyMonths });
+      const resolved = await resolveProductWarranty({
+        sku,
+        mappingMonths: warrantyMonths,
+        catalogProductId: detail.aod_product_id,
+        catalogVariantId: detail.aod_variant_id,
+      });
       warrantyMonths = resolved.months;
 
       let warrantyValid = false;
@@ -397,7 +402,12 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
         }
       }
 
-      const resolved = await resolveProductWarranty({ sku, mappingMonths: warrantyMonths });
+      const resolved = await resolveProductWarranty({
+        sku,
+        mappingMonths: warrantyMonths,
+        catalogProductId: item.product_id,
+        catalogVariantId: item.variant_id,
+      });
       warrantyMonths = resolved.months;
 
       let warrantyValid = false;
