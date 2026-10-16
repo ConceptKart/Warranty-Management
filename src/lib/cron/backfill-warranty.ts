@@ -112,8 +112,8 @@ export async function backfillProductWarranties(options?: {
     }
     const resolved = await resolveProductWarranty({
       sku,
-      catalogProductId: row.product_id,
-      catalogVariantId: row.variant_id,
+      catalogProductId: row.product_id != null ? String(row.product_id) : null,
+      catalogVariantId: row.variant_id != null ? String(row.variant_id) : null,
     });
     if (resolved.months > 0 && resolved.source === "baselinker") {
       result.filled += 1;

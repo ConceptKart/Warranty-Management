@@ -292,8 +292,8 @@ async function lookupMappingWarrantyBySku(sku: string): Promise<number> {
 export async function resolveProductWarranty(input: {
   sku: string;
   mappingMonths?: number;
-  catalogProductId?: string | number | null;
-  catalogVariantId?: string | number | null;
+  catalogProductId?: string | number | bigint | null;
+  catalogVariantId?: string | number | bigint | null;
 }): Promise<ResolvedWarranty> {
   const sku = input.sku.trim();
   const mappingMonths = Number(input.mappingMonths ?? 0);
