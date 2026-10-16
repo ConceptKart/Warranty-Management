@@ -99,8 +99,34 @@ test("resolve uses mapping months first and does not call BaseLinker", async () 
   assert.ok(calls.some((c) => c.kind === "executeRaw" && c.sql.includes("UPDATE bl_products")));
 });
 
-test("resolve matches bl_products.warranty with compacted SKU", async () => {
+test("resolve uses products.warranty_period_months first, even if mapping and bl_products have values", async () => {
+  net.respondWith(() => {
+    throw new Error("BaseLinker should not be called");
+  });
+  setQueryRaw(async (sql) => {
+    if (sql.includes("FROM products")) {
+      assert.ok(sql.includes("product_sku"));
+      return [{ warranty_period_months: 12 }];
+    }
+    if (sql.includes("FROM bl_products")) {
+      return [{ warranty: "18 months", product_id: 99 }];
+    }
+    return [];
+  });
+  const resolved = await resolveProductWarranty({
+    sku: "tanchjim-bunny-IEM-Clr-Mic-Type C",
+    mappingMonths: 24,
+    catalogProductId: 111,
+  });
+  assert.equal(resolved.source, "products");
+  assert.equal(resolved.months, 12);
+  assert.equal(resolved.text, "1 year");
+  assert.equal(net.calls.length, 0);
+});
+
+test("resolve uses bl_products.warranty when the product table has no period", async () => {
   setQueryRaw(async (sql, values) => {
+    if (sql.includes("FROM products")) return [];
     if (sql.includes("FROM bl_products") && sql.includes("warranty IS NOT NULL")) {
       assert.equal(values[1], compactSku("CK-AA-01"));
       return [{ warranty: "18 months", product_id: 99 }];
@@ -110,27 +136,6 @@ test("resolve matches bl_products.warranty with compacted SKU", async () => {
   const resolved = await resolveProductWarranty({ sku: "CK-AA-01" });
   assert.equal(resolved.source, "bl_products");
   assert.equal(resolved.months, 18);
-  assert.equal(net.calls.length, 0);
-});
-
-test("resolve uses products.warranty_period_months when mapping and bl_products are empty", async () => {
-  net.respondWith(() => {
-    throw new Error("BaseLinker should not be called");
-  });
-  setQueryRaw(async (sql) => {
-    if (sql.includes("FROM products")) {
-      assert.ok(sql.includes("product_sku"));
-      return [{ warranty_period_months: 12 }];
-    }
-    return [];
-  });
-  const resolved = await resolveProductWarranty({
-    sku: "tanchjim-bunny-IEM-Clr-Mic-Type C",
-    catalogProductId: 111,
-  });
-  assert.equal(resolved.source, "products");
-  assert.equal(resolved.months, 12);
-  assert.equal(resolved.text, "1 year");
   assert.equal(net.calls.length, 0);
 });
 

@@ -1,6 +1,6 @@
 /**
  * Warranty months for portal verify:
- * amazon_sku_mapping → bl_products.warranty → products.warranty_period_months
+ * products.warranty_period_months → bl_products.warranty → amazon_sku_mapping
  * → BaseLinker extra_field_1281.
  * Live BL hits are written back so bl_products.warranty stays filled.
  */
@@ -336,17 +336,20 @@ export async function resolveProductWarranty(input: {
     input.catalogVariantId != null && Number(input.catalogVariantId) !== 0
       ? String(input.catalogVariantId)
       : null;
-  if (mappingMonths > 0) {
-    const text = monthsToWarrantyText(mappingMonths);
-    if (text && sku) await persistBlProductWarranty(sku, text);
-    return {
-      months: mappingMonths,
-      text,
-      source: "mapping",
-    };
-  }
   if (!sku) {
+    if (mappingMonths > 0) {
+      const text = monthsToWarrantyText(mappingMonths);
+      return { months: mappingMonths, text, source: "mapping" };
+    }
     return { months: 0, text: null, source: "none" };
+  }
+
+  const catalogMonths = await lookupProductsTableWarranty(sku);
+  if (catalogMonths > 0) {
+    const text = monthsToWarrantyText(catalogMonths);
+    if (text) await persistBlProductWarranty(sku, text);
+    await persistMappingWarranty(sku, catalogMonths, catalogProductId, catalogVariantId);
+    return { months: catalogMonths, text, source: "products" };
   }
 
   const bl = await lookupBlProductsWarranty(sku);
@@ -361,19 +364,21 @@ export async function resolveProductWarranty(input: {
     };
   }
 
+  if (mappingMonths > 0) {
+    const text = monthsToWarrantyText(mappingMonths);
+    if (text) await persistBlProductWarranty(sku, text);
+    return {
+      months: mappingMonths,
+      text,
+      source: "mapping",
+    };
+  }
+
   const skuMapped = await lookupMappingWarrantyBySku(sku);
   if (skuMapped > 0) {
     const text = monthsToWarrantyText(skuMapped);
     if (text) await persistBlProductWarranty(sku, text);
     return { months: skuMapped, text, source: "mapping_sku" };
-  }
-
-  const catalogMonths = await lookupProductsTableWarranty(sku);
-  if (catalogMonths > 0) {
-    const text = monthsToWarrantyText(catalogMonths);
-    if (text) await persistBlProductWarranty(sku, text);
-    await persistMappingWarranty(sku, catalogMonths, catalogProductId, catalogVariantId);
-    return { months: catalogMonths, text, source: "products" };
   }
 
   const storedBlId = bl?.product_id || (await lookupBlProductId(sku));
