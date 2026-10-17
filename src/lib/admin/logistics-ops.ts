@@ -413,8 +413,16 @@ export async function lookupAwbStatusesByTicketIds(
     ),
   ];
 
+  const expectedTypes: Record<string, "forward" | "reverse"> = {};
+  for (const mapping of Object.values(ticketAwbMap)) {
+    if (mapping.forward) expectedTypes[mapping.forward] = "forward";
+    if (mapping.reverse) expectedTypes[mapping.reverse] = "reverse";
+  }
+
   const awbStatuses =
-    allAwbs.length > 0 ? await lookupAwbStatusesFromExternal(allAwbs) : {};
+    allAwbs.length > 0
+      ? await lookupAwbStatusesFromExternal(allAwbs, { expectedTypes })
+      : {};
 
   for (const tid of uniqueIds) {
     const mapping = ticketAwbMap[tid];

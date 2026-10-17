@@ -140,7 +140,9 @@ export async function getTrackingStatusesForTicket(
   const awbsToQuery = awbs.filter((awb) => !terminalStatusMap[awb]);
   let liveStatuses: Record<string, AwbStatusResult> = {};
   if (awbsToQuery.length > 0) {
-    liveStatuses = await lookupAwbStatusesFromExternal(awbsToQuery);
+    liveStatuses = await lookupAwbStatusesFromExternal(awbsToQuery, {
+      expectedTypes: awbTypeMap,
+    });
   }
 
   const allStatuses = { ...liveStatuses, ...terminalStatusMap };
@@ -174,7 +176,9 @@ export async function refreshTicketTracking(ticketId: number) {
   let liveStatuses: Record<string, AwbStatusResult> = {};
   if (awbsToQuery.length > 0) {
     try {
-      liveStatuses = await lookupAwbStatusesFromExternal(awbsToQuery);
+      liveStatuses = await lookupAwbStatusesFromExternal(awbsToQuery, {
+        expectedTypes: awbTypeMap,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "External DB lookup failed";

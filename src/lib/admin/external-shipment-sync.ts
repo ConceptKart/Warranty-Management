@@ -38,7 +38,22 @@ const REVERSE_MAPPINGS: Record<string, string> = {
   "PICKUP SCHEDULED": "return_pickup_generated",
   RPSH: "return_in_transit",
   ROOD: "return_out_for_pickup",
+  RINT: "return_in_transit",
+  RTD: "return_delivered",
+  RTO: "return_in_transit",
+  RPUP: "return_in_transit",
+  RPOD: "return_out_for_pickup",
 };
+
+const REVERSE_COURIER_CODES = new Set([
+  "RPSH",
+  "ROOD",
+  "RINT",
+  "RTD",
+  "RTO",
+  "RPUP",
+  "RPOD",
+]);
 
 const KNOWN_FORWARD = new Set(Object.keys(FORWARD_MAPPINGS));
 const KNOWN_REVERSE = new Set([
@@ -49,6 +64,11 @@ const KNOWN_REVERSE = new Set([
   "RETURN PICKUP GENERATED",
   "AWB ASSIGNED",
   "PICKUP SCHEDULED",
+  "RINT",
+  "RTD",
+  "RTO",
+  "RPUP",
+  "RPOD",
 ]);
 const NEGLECTED_REVERSE = new Set(["RPSH", "ROOD"]);
 
@@ -57,7 +77,7 @@ export function looksLikeReverseStatus(status: string | null | undefined) {
   if (!normalized) return false;
   return (
     normalized.startsWith("RETURN") ||
-    KNOWN_REVERSE.has(normalized) ||
+    REVERSE_COURIER_CODES.has(normalized) ||
     NEGLECTED_REVERSE.has(normalized)
   );
 }
@@ -101,10 +121,13 @@ type ReverseRow = {
 function classifyFromRecords(
   forwardRecord?: ForwardRow,
   reverseRecord?: ReverseRow,
+  expectedType?: "forward" | "reverse",
 ): AwbStatusResult {
   const ordersStatus = forwardRecord?.shipment_status ?? "";
   const useReverse =
-    Boolean(reverseRecord) || looksLikeReverseStatus(ordersStatus);
+    expectedType === "reverse" ||
+    Boolean(reverseRecord) ||
+    looksLikeReverseStatus(ordersStatus);
 
   if (useReverse) {
     const externalStatus =
@@ -220,9 +243,13 @@ async function persistLookup(
  */
 export async function lookupAwbStatusesFromExternal(
   awbNumbers: string[],
-  options?: { persist?: boolean },
+  options?: {
+    persist?: boolean;
+    expectedTypes?: Record<string, "forward" | "reverse">;
+  },
 ): Promise<Record<string, AwbStatusResult>> {
   const persist = options?.persist !== false;
+  const expectedTypes = options?.expectedTypes ?? {};
   const unique = [...new Set(awbNumbers.map((a) => a.trim()).filter(Boolean))];
   const results: Record<string, AwbStatusResult> = {};
   if (unique.length === 0) return results;
@@ -263,7 +290,11 @@ export async function lookupAwbStatusesFromExternal(
     : { syncLocalFromLookup: null };
 
   for (const awb of unique) {
-    const result = classifyFromRecords(forwardData[awb], reverseData[awb]);
+    const result = classifyFromRecords(
+      forwardData[awb],
+      reverseData[awb],
+      expectedTypes[awb],
+    );
     results[awb] = result;
     if (persist) await persistLookup(awb, result, syncLocalFromLookup);
   }
@@ -275,20 +306,30 @@ export async function lookupAwbStatusesFromExternal(
     try {
       const live = await fetchShipwayLiveAwbStatus(awb);
       if (!live?.status) continue;
-      const liveResult = looksLikeReverseStatus(live.status)
-        ? classifyFromRecords(undefined, {
-            tracking_number: awb,
-            tracking_status: live.status,
-            carrier: live.courier,
-            state_updated_at: null,
-            status: null,
-          })
-        : classifyFromRecords({
-            awb_number: awb,
-            shipment_status: live.status,
-            courier_name: live.courier,
-            updated_at: null,
-          });
+      const expected = expectedTypes[awb];
+      const liveResult =
+        expected === "reverse" || looksLikeReverseStatus(live.status)
+          ? classifyFromRecords(
+              undefined,
+              {
+                tracking_number: awb,
+                tracking_status: live.status,
+                carrier: live.courier,
+                state_updated_at: null,
+                status: null,
+              },
+              expected,
+            )
+          : classifyFromRecords(
+              {
+                awb_number: awb,
+                shipment_status: live.status,
+                courier_name: live.courier,
+                updated_at: null,
+              },
+              undefined,
+              expected,
+            );
       if (liveResult.display_status === "N/A") continue;
       results[awb] = liveResult;
       if (persist) await persistLookup(awb, liveResult, syncLocalFromLookup);

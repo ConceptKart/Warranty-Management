@@ -87,6 +87,31 @@ test("forward DELIVERED stays forward", async () => {
   assert.equal(results["111"].type, "forward");
 });
 
+test("RINT on a return AWB stays reverse, not forward AWB assigned", async () => {
+  setExternalQuery(async (sql) => {
+    if (sql.includes("FROM orders")) {
+      return [
+        {
+          awb_number: "90699301114",
+          shipment_status: "RINT",
+          courier_name: "Bluedart",
+          updated_at: "2026-10-16 17:13:24",
+        },
+      ];
+    }
+    return [];
+  });
+
+  const results = await lookupAwbStatusesFromExternal(["90699301114"], {
+    persist: false,
+    expectedTypes: { "90699301114": "reverse" },
+  });
+  assert.equal(results["90699301114"].type, "reverse");
+  assert.equal(results["90699301114"].mapped_status, "return_in_transit");
+  assert.equal(results["90699301114"].display_status, "RINT");
+  assert.equal(results["90699301114"].needs_action, false);
+});
+
 test("falls back to Shipway API when replica has no AWB", async () => {
   setExternalQuery(async () => []);
   const restoreEnv = setEnv({
