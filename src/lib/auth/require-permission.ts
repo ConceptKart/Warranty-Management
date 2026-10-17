@@ -22,8 +22,9 @@ type AuthFail = {
 
 export async function requireAdminPermission(
   permission: AdminPermission | readonly AdminPermission[],
+  request?: Request,
 ): Promise<AuthOk | AuthFail> {
-  const session = await getSession();
+  const session = await getSession(request);
   if (!session.adminUser) {
     return {
       ok: false,

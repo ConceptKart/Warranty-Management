@@ -30,9 +30,10 @@ export function EditCustomerButton({
     try {
       const res = await fetch("/api/admin/tickets/customer", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ticket_id: ticketId,
+          ticket_id: Number(ticketId),
           phone: phoneValue,
           address: addressValue,
         }),

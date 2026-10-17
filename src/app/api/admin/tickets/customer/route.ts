@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/get-session";
+import { requireAdminPermission } from "@/lib/auth/require-permission";
 import { updateCustomerInfo } from "@/lib/admin/ticket-details";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.adminUser) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminPermission("edit_tickets", request);
+  if (!auth.ok) return auth.response;
 
   const body = (await request.json()) as {
     ticket_id?: number;

@@ -1004,11 +1004,12 @@ export async function updateCustomerInfo(
   try {
     await prisma.$executeRaw`
       UPDATE customers c
-      JOIN orders o ON c.customer_id = o.customer_id
-      SET c.phone = ${phone}, c.address = ${address}
-      WHERE o.order_id = (
-        SELECT order_id FROM warranty_tickets WHERE ticket_id = ${ticketId}
-      )
+      INNER JOIN orders o ON o.customer_id = c.customer_id
+      INNER JOIN warranty_tickets wt ON wt.order_id = o.order_id
+      SET c.phone = ${phone},
+          c.address = ${address},
+          c.updated_at = NOW()
+      WHERE wt.ticket_id = ${ticketId}
     `;
     return { success: true as const };
   } catch (error) {

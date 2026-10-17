@@ -314,16 +314,18 @@ export default async function TicketDetailsPage({
             title="Customer Information"
             icon="fas fa-user"
             headerAction={
-              <EditCustomerButton
-                ticketId={ticket.ticket_id}
-                customerName={
-                  `${ticket.first_name ?? ""} ${ticket.last_name ?? ""}`.trim() ||
-                  "N/A"
-                }
-                customerEmail={ticket.customer_email || ""}
-                phone={ticket.phone || ""}
-                address={ticket.address || ""}
-              />
+              canEditTickets ? (
+                <EditCustomerButton
+                  ticketId={Number(ticket.ticket_id)}
+                  customerName={
+                    `${ticket.first_name ?? ""} ${ticket.last_name ?? ""}`.trim() ||
+                    "N/A"
+                  }
+                  customerEmail={ticket.customer_email || ""}
+                  phone={ticket.phone || ""}
+                  address={ticket.address || ""}
+                />
+              ) : null
             }
           >
             <Row
