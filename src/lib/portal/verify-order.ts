@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/db";
-import { resolveProductWarranty } from "@/lib/portal/product-warranty";
+import {
+  lookupCatalogProductBySku,
+  resolveProductWarranty,
+} from "@/lib/portal/product-warranty";
 import { lookupShopifyOrderClassification } from "@/lib/portal/shopify-classification";
 import type { PortalOrderData } from "@/lib/portal/session";
 
@@ -319,8 +322,6 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
       state: string;
       pincode: string;
       order_ean: string | number | null;
-      catalog_name: string | null;
-      catalog_ean: string | number | null;
       v_warranty: number | null;
       p_warranty: number | null;
     };
@@ -329,38 +330,6 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
       SELECT so.shopify_order_id, so.order_date, so.product_id, so.variant_id, so.sku, so.qty,
              so.customer_name, so.phone_number, so.email, so.customer_address, so.city, so.state, so.pincode,
              so.ean AS order_ean,
-             (
-               SELECT bp.product_name
-               FROM bl_products bp
-               WHERE bp.sku IS NOT NULL
-                 AND TRIM(bp.sku) != ''
-                 AND so.sku IS NOT NULL
-                 AND TRIM(so.sku) != ''
-                 AND (
-                   CONVERT(TRIM(bp.sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                     = CONVERT(TRIM(so.sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                   OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(bp.sku)), ' ', ''), '-', ''), '_', '')
-                     = REPLACE(REPLACE(REPLACE(LOWER(TRIM(so.sku)), ' ', ''), '-', ''), '_', '')
-                 )
-               LIMIT 1
-             ) AS catalog_name,
-             (
-               SELECT bp.ean
-               FROM bl_products bp
-               WHERE bp.sku IS NOT NULL
-                 AND TRIM(bp.sku) != ''
-                 AND so.sku IS NOT NULL
-                 AND TRIM(so.sku) != ''
-                 AND bp.ean IS NOT NULL
-                 AND TRIM(bp.ean) != ''
-                 AND (
-                   CONVERT(TRIM(bp.sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                     = CONVERT(TRIM(so.sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                   OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(bp.sku)), ' ', ''), '-', ''), '_', '')
-                     = REPLACE(REPLACE(REPLACE(LOWER(TRIM(so.sku)), ' ', ''), '-', ''), '_', '')
-                 )
-               LIMIT 1
-             ) AS catalog_ean,
              (
                SELECT asm_v.warranty_given
                FROM amazon_sku_mapping asm_v
@@ -448,12 +417,15 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
         }
       }
 
-      const resolved = await resolveProductWarranty({
-        sku,
-        mappingMonths: warrantyMonths,
-        catalogProductId: item.product_id,
-        catalogVariantId: item.variant_id,
-      });
+      const [resolved, catalog] = await Promise.all([
+        resolveProductWarranty({
+          sku,
+          mappingMonths: warrantyMonths,
+          catalogProductId: item.product_id,
+          catalogVariantId: item.variant_id,
+        }),
+        sku ? lookupCatalogProductBySku(sku).catch(() => null) : null,
+      ]);
       warrantyMonths = resolved.months;
 
       let warrantyValid = false;
@@ -481,8 +453,8 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
         }
       }
 
-      const catalogName = item.catalog_name?.trim() || "";
-      const eanRaw = item.catalog_ean ?? item.order_ean;
+      const catalogName = catalog?.product_name?.trim() || "";
+      const eanRaw = catalog?.ean ?? item.order_ean;
       const ean =
         eanRaw != null && String(eanRaw).trim() && String(eanRaw) !== "0"
           ? String(eanRaw).trim()
