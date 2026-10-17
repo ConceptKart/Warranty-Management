@@ -3,6 +3,8 @@ import path from "path";
 import { prisma } from "@/lib/db";
 import { sendForStatus } from "@/lib/email/email-service";
 import type { PortalOrderData, PortalSessionData } from "@/lib/portal/session";
+import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
+import { compactSku } from "@/lib/portal/sku-normalize";
 import { uploadToRemoteServer } from "@/lib/portal/upload-to-remote";
 
 export type ClaimInput = {
@@ -496,49 +498,72 @@ async function upsertCustomer(input: {
   return inserted[0]!.customer_id;
 }
 
+async function findProductIdBySku(sku: string): Promise<number | null> {
+  const key = sku.trim();
+  const compact = compactSku(key);
+  if (!key) return null;
+  const rows = await prisma.$queryRaw<Array<{ product_id: number }>>`
+    SELECT product_id
+    FROM products
+    WHERE product_sku IS NOT NULL
+      AND TRIM(product_sku) != ''
+      AND (
+        CONVERT(TRIM(product_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(product_sku)), ' ', ''), '-', ''), '_', '')
+          = ${compact}
+      )
+    LIMIT 1
+  `;
+  return rows[0]?.product_id ?? null;
+}
+
 async function getOrCreateProductId(
   sku: string,
   name: string,
 ): Promise<number> {
-  if (sku) {
-    const bySku = await prisma.$queryRaw<Array<{ product_id: number }>>`
-      SELECT product_id FROM products WHERE product_sku = ${sku} LIMIT 1
+  const key = sku.trim();
+  const existing = await findProductIdBySku(key);
+  if (existing) return existing;
+
+  const compact = compactSku(key);
+  if (name.trim() && compactSku(name) !== compact) {
+    const byName = await prisma.$queryRaw<Array<{ product_id: number }>>`
+      SELECT product_id FROM products WHERE product_name = ${name} LIMIT 1
     `;
-    if (bySku[0]?.product_id) return bySku[0].product_id;
+    if (byName[0]?.product_id) return byName[0].product_id;
   }
 
-  const byName = await prisma.$queryRaw<Array<{ product_id: number }>>`
-    SELECT product_id FROM products WHERE product_name = ${name} LIMIT 1
-  `;
-  if (byName[0]?.product_id) return byName[0].product_id;
+  const catalog = key ? await lookupCatalogProductBySku(key) : null;
+  const insertName =
+    (catalog?.product_name && compactSku(catalog.product_name) !== compact
+      ? catalog.product_name
+      : name) || key || "Warranty Product";
+  const insertEan = catalog?.ean ?? null;
 
-  let uniqueSku = sku || `GEN-${Date.now()}`;
+  let uniqueSku = key || `GEN-${Date.now()}`;
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       await prisma.$executeRaw`
         INSERT INTO products (
-          product_name, product_sku, category, warranty_period_months,
+          product_name, product_sku, ean, category, warranty_period_months,
           replacement_period_days, is_electronic, created_at, updated_at
         ) VALUES (
-          ${name}, ${uniqueSku}, 'Generic', 12.00, 10.00, 1, NOW(), NOW()
+          ${insertName}, ${uniqueSku}, ${insertEan}, 'Generic', 12.00, 10.00, 1, NOW(), NOW()
         )
       `;
-      const created = await prisma.$queryRaw<Array<{ product_id: number }>>`
-        SELECT product_id FROM products WHERE product_sku = ${uniqueSku} LIMIT 1
-      `;
-      if (created[0]?.product_id) return created[0].product_id;
+      const created = await findProductIdBySku(uniqueSku);
+      if (created) return created;
     } catch {
-      uniqueSku = `${sku || "GEN"}-${attempt + 1}`;
+      const raced = await findProductIdBySku(key || uniqueSku);
+      if (raced) return raced;
+      uniqueSku = `${key || "GEN"}-${attempt + 1}`;
     }
   }
 
-  const fallback = await prisma.$queryRaw<Array<{ product_id: number }>>`
-    SELECT product_id FROM products ORDER BY product_id ASC LIMIT 1
-  `;
-  if (!fallback[0]?.product_id) {
-    throw new Error("Unable to resolve product for claim");
-  }
-  return fallback[0].product_id;
+  const lastTry = await findProductIdBySku(key);
+  if (lastTry) return lastTry;
+  throw new Error("Unable to resolve product for claim");
 }
 
 function resolveSelectedProduct(orderData: PortalOrderData, session: PortalSessionData) {

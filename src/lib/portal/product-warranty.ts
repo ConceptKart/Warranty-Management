@@ -60,6 +60,140 @@ export type ResolvedWarranty = {
   source: "mapping" | "bl_products" | "mapping_sku" | "products" | "baselinker" | "none";
 };
 
+export type CatalogProduct = {
+  product_name: string | null;
+  product_sku: string;
+  ean: string | null;
+  product_id: number | null;
+};
+
+function asEan(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text || text === "0") return null;
+  return text;
+}
+
+/**
+ * Name + EAN for a claimed SKU from products / bl_products / marketplace tables.
+ * Used so ticket UI does not show a different catalog row than the claim.
+ */
+export async function lookupCatalogProductBySku(
+  sku: string,
+): Promise<CatalogProduct | null> {
+  const key = sku.trim();
+  const compact = compactSku(key);
+  if (!key) return null;
+
+  const [fromProducts, fromBl, fromShopify, fromAmazon] = await Promise.all([
+    prisma.$queryRaw<
+      Array<{
+        product_id: number;
+        product_name: string | null;
+        product_sku: string | null;
+        ean: string | number | null;
+      }>
+    >`
+      SELECT product_id, product_name, product_sku, ean
+      FROM products
+      WHERE product_sku IS NOT NULL
+        AND TRIM(product_sku) != ''
+        AND (
+          CONVERT(TRIM(product_sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(product_sku)), ' ', ''), '-', ''), '_', '')
+            = ${compact}
+        )
+      LIMIT 1
+    `.catch(() => []),
+    prisma
+      .$queryRaw<
+        Array<{
+          product_name: string | null;
+          sku: string | null;
+          ean: string | number | null;
+        }>
+      >`
+        SELECT product_name, sku, ean
+        FROM bl_products
+        WHERE sku IS NOT NULL
+          AND sku != ''
+          AND (
+            CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
+              = ${compact}
+          )
+        LIMIT 1
+      `
+      .catch(() => []),
+    prisma
+      .$queryRaw<Array<{ ean: string | number | null }>>`
+        SELECT ean
+        FROM shopify_orders
+        WHERE sku IS NOT NULL
+          AND TRIM(sku) != ''
+          AND ean IS NOT NULL
+          AND ean != 0
+          AND (
+            CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
+              = ${compact}
+          )
+        LIMIT 1
+      `
+      .catch(() => []),
+    prisma
+      .$queryRaw<Array<{ ean: string | number | null }>>`
+        SELECT ean
+        FROM amazon_order_details
+        WHERE sku IS NOT NULL
+          AND TRIM(sku) != ''
+          AND ean IS NOT NULL
+          AND TRIM(ean) != ''
+          AND (
+            CONVERT(TRIM(sku) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              = CONVERT(${key} USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(sku)), ' ', ''), '-', ''), '_', '')
+              = ${compact}
+          )
+        LIMIT 1
+      `
+      .catch(() => []),
+  ]);
+
+  const productRow = fromProducts[0];
+  const blRow = fromBl[0];
+  const nameFromBl = blRow?.product_name?.trim() || null;
+  const nameFromProducts = productRow?.product_name?.trim() || null;
+  const nameIsSku = (name: string | null) =>
+    !name || compactSku(name) === compact;
+
+  const product_name =
+    (nameFromBl && !nameIsSku(nameFromBl) ? nameFromBl : null) ||
+    (nameFromProducts && !nameIsSku(nameFromProducts) ? nameFromProducts : null) ||
+    nameFromBl ||
+    nameFromProducts ||
+    null;
+
+  const ean =
+    asEan(productRow?.ean) ||
+    asEan(blRow?.ean) ||
+    asEan(fromShopify[0]?.ean) ||
+    asEan(fromAmazon[0]?.ean);
+
+  if (!product_name && !ean && productRow?.product_id == null) return null;
+
+  return {
+    product_name,
+    product_sku: (productRow?.product_sku || blRow?.sku || key).trim(),
+    ean,
+    product_id:
+      productRow?.product_id != null ? Number(productRow.product_id) : null,
+  };
+}
+
 export async function persistBlProductWarranty(
   sku: string,
   warrantyText: string,

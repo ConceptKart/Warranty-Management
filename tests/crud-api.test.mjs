@@ -44,8 +44,10 @@ afterEach(() => {
 });
 
 test("A: valid API key returns ticket details including the customer phone", async () => {
-  setQueryRaw(async () => [{ c: 1n }]);
-  setQueryRawUnsafe(async () => [ticket]);
+  setQueryRawUnsafe(async (sql) => {
+    if (String(sql).includes("COUNT(*)")) return [{ c: 1n }];
+    return [ticket];
+  });
 
   const res = await get(`?search=${TICKET}`, { "x-crud-api-key": KEY });
   const body = await res.json();
@@ -55,9 +57,31 @@ test("A: valid API key returns ticket details including the customer phone", asy
   assert.equal(body.total_records, 1);
   assert.equal(body.data[0].ticket_number, TICKET);
   assert.equal(body.data[0].customer_phone, "9000000001");
-  const rowsQuery = calls.find((c) => c.kind === "queryRawUnsafe");
+  const rowsQuery = calls.find(
+    (c) => c.kind === "queryRawUnsafe" && String(c.sql).includes("ORDER BY"),
+  );
   assert.ok(rowsQuery.values.includes(`%${TICKET}%`));
   assert.ok(!rowsQuery.sql.includes(TICKET), "search term must be a bound parameter");
+});
+
+test("A: exclude_status=pending lists only non-pending tickets", async () => {
+  setQueryRawUnsafe(async (sql, ...values) => {
+    if (sql.includes("COUNT(*)")) return [{ c: 1n }];
+    return [ticket];
+  });
+
+  const res = await get("?page=1&limit=100&exclude_status=pending", {
+    "x-crud-api-key": KEY,
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.status, true);
+  const listQuery = calls.find(
+    (c) => c.kind === "queryRawUnsafe" && c.sql.includes("ORDER BY"),
+  );
+  assert.ok(listQuery.sql.includes("NOT IN"));
+  assert.ok(listQuery.sql.includes("ticket_statuses"));
+  assert.ok(listQuery.values.includes("pending"));
 });
 
 test("A: admin session is accepted without an API key", async () => {

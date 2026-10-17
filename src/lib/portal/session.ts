@@ -12,6 +12,7 @@ export type PortalOrderData = {
     product_id: string | number;
     name: string;
     sku: string;
+    ean?: string;
     quantity: number;
     variant_id?: string | number;
     warranty_months: number;

@@ -226,8 +226,10 @@ export default async function TicketDetailsPage({
                           {attachment.original_filename}
                         </div>
                         <div className="small text-muted">
-                          {attachment.file_type} ·{" "}
-                          {Math.round(attachment.file_size / 1024)} KB
+                          {attachment.file_type}
+                          {attachment.file_size > 0
+                            ? ` · ${Math.round(attachment.file_size / 1024)} KB`
+                            : ""}
                         </div>
                         {url ? (
                           <a
@@ -359,6 +361,12 @@ export default async function TicketDetailsPage({
               <>
                 <Row label="Name" value={selectedProducts[0].name ?? "—"} />
                 <Row label="SKU" value={selectedProducts[0].sku ?? "—"} />
+                {selectedProducts[0].ean || ticket.product_ean ? (
+                  <Row
+                    label="EAN"
+                    value={String(selectedProducts[0].ean || ticket.product_ean)}
+                  />
+                ) : null}
                 {Number(selectedProducts[0].quantity ?? 1) > 1 ? (
                   <Row
                     label="Quantity"

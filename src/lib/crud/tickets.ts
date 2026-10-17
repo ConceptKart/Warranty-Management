@@ -51,35 +51,74 @@ async function generateTicketNumber(ticketTypeId: number): Promise<string> {
   return `${prefix}${yearMonth}${String(next).padStart(4, "0")}`;
 }
 
+function ticketStatusFilter(url?: URL | null) {
+  const statusId = Number(url?.searchParams.get("status_id") ?? "");
+  const statusCode = url?.searchParams.get("status_code")?.trim() || "";
+  const excludeStatus =
+    url?.searchParams.get("exclude_status")?.trim() ||
+    url?.searchParams.get("exclude_status_code")?.trim() ||
+    "";
+
+  if (Number.isInteger(statusId) && statusId > 0) {
+    return { sql: " AND wt.status_id = ?", params: [statusId] as (string | number)[] };
+  }
+  if (statusCode) {
+    return {
+      sql: " AND wt.status_id IN (SELECT status_id FROM ticket_statuses WHERE status_code = ?)",
+      params: [statusCode] as (string | number)[],
+    };
+  }
+  if (excludeStatus) {
+    return {
+      sql: " AND wt.status_id NOT IN (SELECT status_id FROM ticket_statuses WHERE status_code = ?)",
+      params: [excludeStatus] as (string | number)[],
+    };
+  }
+  return { sql: "", params: [] as (string | number)[] };
+}
+
 export async function listTickets(
   page: number,
   limit: number,
   offset: number,
   search?: string | null,
+  url?: URL | null,
 ) {
   const term = search?.trim();
+  const status = ticketStatusFilter(url);
   if (term) {
     const like = `%${term}%`;
     const [countRows, rows] = await Promise.all([
-      prisma.$queryRaw<[{ c: bigint }]>`
-        SELECT COUNT(*) AS c FROM warranty_tickets wt
+      prisma.$queryRawUnsafe<[{ c: bigint }]>(
+        `SELECT COUNT(*) AS c FROM warranty_tickets wt
         LEFT JOIN orders o ON o.order_id = wt.order_id
         LEFT JOIN customers c ON c.customer_id = o.customer_id
-        WHERE wt.ticket_number LIKE ${like}
-           OR wt.claim_number LIKE ${like}
-           OR wt.awb_number LIKE ${like}
-           OR wt.reverse_awb_number LIKE ${like}
-           OR CAST(wt.ticket_id AS CHAR) = ${term}
-           OR c.phone LIKE ${like}
-      `,
+        WHERE (
+           wt.ticket_number LIKE ?
+           OR wt.claim_number LIKE ?
+           OR wt.awb_number LIKE ?
+           OR wt.reverse_awb_number LIKE ?
+           OR CAST(wt.ticket_id AS CHAR) = ?
+           OR c.phone LIKE ?
+        )${status.sql}`,
+        like,
+        like,
+        like,
+        like,
+        term,
+        like,
+        ...status.params,
+      ),
       prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
         `SELECT ${TICKET_COLS} ${TICKET_FROM}
-         WHERE wt.ticket_number LIKE ?
+         WHERE (
+            wt.ticket_number LIKE ?
             OR wt.claim_number LIKE ?
             OR wt.awb_number LIKE ?
             OR wt.reverse_awb_number LIKE ?
             OR CAST(wt.ticket_id AS CHAR) = ?
             OR c.phone LIKE ?
+         )${status.sql}
          ORDER BY wt.ticket_id DESC
          LIMIT ? OFFSET ?`,
         like,
@@ -88,6 +127,7 @@ export async function listTickets(
         like,
         term,
         like,
+        ...status.params,
         limit,
         offset,
       ),
@@ -101,10 +141,15 @@ export async function listTickets(
   }
 
   const [countRows, rows] = await Promise.all([
-    prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM warranty_tickets`,
+    prisma.$queryRawUnsafe<[{ c: bigint }]>(
+      `SELECT COUNT(*) AS c FROM warranty_tickets wt WHERE 1=1${status.sql}`,
+      ...status.params,
+    ),
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
       `SELECT ${TICKET_COLS} ${TICKET_FROM}
+       WHERE 1=1${status.sql}
        ORDER BY wt.ticket_id DESC LIMIT ? OFFSET ?`,
+      ...status.params,
       limit,
       offset,
     ),

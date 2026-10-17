@@ -9,6 +9,7 @@ type Product = {
   product_id: string | number;
   name: string;
   sku: string;
+  ean?: string;
   quantity: number;
   warranty_status: string;
   warranty_months: number;
@@ -257,6 +258,7 @@ export function IssueSelectionForm({
               product_id: p.product_id,
               name: p.name,
               sku: p.sku,
+              ean: p.ean,
               quantity: quantities[key] ?? 1,
             },
           ];

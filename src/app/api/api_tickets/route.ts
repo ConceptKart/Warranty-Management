@@ -9,7 +9,13 @@ export const { GET, POST, PUT, DELETE } = makeCrudHandlers({
   deletePerm: "delete_tickets",
   deleteIdMessage: "ticket_id is required.",
   list: async ({ page, limit, offset, url }) =>
-    tickets.listTickets(page, limit, offset, url.searchParams.get("search")),
+    tickets.listTickets(
+      page,
+      limit,
+      offset,
+      url.searchParams.get("search"),
+      url,
+    ),
   getById: (id) => tickets.getTicketById(id),
   create: (body) => tickets.createTicket(body),
   update: (body) => tickets.updateTicket(body),

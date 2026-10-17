@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getTrackingStatusesForTicket } from "@/lib/admin/shipment-tracking";
+import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
+import { compactSku } from "@/lib/portal/sku-normalize";
 
 export type TicketDetail = {
   ticket_id: number;
@@ -40,6 +42,7 @@ export type TicketDetail = {
   customer_id: number;
   product_name: string | null;
   product_sku: string | null;
+  product_ean: string | null;
   warranty_period_months: unknown;
   order_number: string | null;
   baselinker_order_id: string | null;
@@ -164,6 +167,7 @@ export async function getTicketDetails(ticketNumber: string) {
       c.customer_id,
       p.product_name,
       p.product_sku,
+      p.ean AS product_ean,
       p.warranty_period_months,
       COALESCE(wt.claim_number, o.order_number) AS order_number,
       o.baselinker_order_id,
@@ -193,6 +197,8 @@ export async function getTicketDetails(ticketNumber: string) {
   const ticket = rows[0];
   if (!ticket) return null;
 
+  const claimedSku = claimedSkuFromTicket(ticket);
+
   const [
     attachments,
     comments,
@@ -201,6 +207,7 @@ export async function getTicketDetails(ticketNumber: string) {
     availableStatuses,
     tracking,
     previousClaims,
+    catalog,
   ] = await Promise.all([
     getTicketAttachments(ticketNumber),
     getTicketComments(ticket.ticket_id),
@@ -224,7 +231,12 @@ export async function getTicketDetails(ticketNumber: string) {
       ticket.baselinker_order_id,
       ticket.ticket_id,
     ),
+    claimedSku
+      ? lookupCatalogProductBySku(claimedSku).catch(() => null)
+      : Promise.resolve(null),
   ]);
+
+  applyCatalogToTicket(ticket, catalog);
 
   return {
     ...ticket,
@@ -274,6 +286,74 @@ export async function getPreviousClaimsForOrder(
   } catch (error) {
     console.error("[getPreviousClaimsForOrder]", error);
     return [];
+  }
+}
+
+function claimedSkuFromTicket(ticket: TicketDetail) {
+  try {
+    const selected = JSON.parse(ticket.selected_products_json ?? "null") as Array<{
+      sku?: string;
+      product_sku?: string;
+    }>;
+    const fromJson = String(selected?.[0]?.product_sku || selected?.[0]?.sku || "").trim();
+    if (fromJson) return fromJson;
+  } catch {
+    /* ignore */
+  }
+  return ticket.product_sku?.trim() || "";
+}
+
+function applyCatalogToTicket(
+  ticket: TicketDetail,
+  catalog: Awaited<ReturnType<typeof lookupCatalogProductBySku>>,
+) {
+  const claimedSku = claimedSkuFromTicket(ticket);
+  const joinMatches =
+    Boolean(claimedSku) &&
+    Boolean(ticket.product_sku) &&
+    compactSku(claimedSku) === compactSku(ticket.product_sku ?? "");
+
+  if (!joinMatches && claimedSku) {
+    ticket.product_sku = claimedSku;
+  }
+
+  if (catalog?.product_name) {
+    const current = ticket.product_name?.trim() || "";
+    if (
+      !joinMatches ||
+      !current ||
+      compactSku(current) === compactSku(claimedSku)
+    ) {
+      ticket.product_name = catalog.product_name;
+    }
+  }
+
+  if (catalog?.ean) {
+    ticket.product_ean = catalog.ean;
+  }
+
+  if (!ticket.selected_products_json) return;
+  try {
+    const selected = JSON.parse(ticket.selected_products_json) as Array<{
+      name?: string;
+      sku?: string;
+      ean?: string;
+      product_name?: string;
+      product_sku?: string;
+      quantity?: number;
+    }>;
+    if (!Array.isArray(selected) || !selected[0]) return;
+    const first = selected[0];
+    const jsonSku = String(first.product_sku || first.sku || "").trim();
+    const jsonName = String(first.product_name || first.name || "").trim();
+    if (catalog?.product_name && (!jsonName || compactSku(jsonName) === compactSku(jsonSku))) {
+      first.name = catalog.product_name;
+      first.product_name = catalog.product_name;
+    }
+    if (catalog?.ean && !first.ean) first.ean = catalog.ean;
+    ticket.selected_products_json = JSON.stringify(selected);
+  } catch {
+    /* ignore */
   }
 }
 

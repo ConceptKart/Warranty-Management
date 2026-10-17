@@ -4,6 +4,8 @@
 
 import { prisma } from "@/lib/db";
 import { getInventoryProductByEan } from "@/lib/baselinker/inventory";
+import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
+import { compactSku } from "@/lib/portal/sku-normalize";
 
 export type ReplacementProductInfo = {
   success: boolean;
@@ -36,6 +38,7 @@ export async function getReplacementProductInfo(
       baselinker_order_id: string | null;
       replacement_product_id: number | null;
       replacement_ean: string | null;
+      selected_products_json: string | null;
       product_name: string | null;
       product_sku: string | null;
       ean: string | null;
@@ -47,6 +50,7 @@ export async function getReplacementProductInfo(
       o.baselinker_order_id,
       wt.replacement_product_id,
       wt.replacement_ean,
+      wt.selected_products_json,
       p.product_name,
       p.product_sku,
       p.ean
@@ -61,6 +65,8 @@ export async function getReplacementProductInfo(
   if (!ticketData) {
     return { success: false, error: "Ticket not found" };
   }
+
+  const original = await resolveOriginalProduct(ticketData);
 
   let replacementProduct: ReplacementProductInfo["replacement_product"] = null;
   if (ticketData.replacement_product_id) {
@@ -83,12 +89,67 @@ export async function getReplacementProductInfo(
   return {
     success: true,
     ticket: ticketData as unknown as Record<string, unknown>,
-    original_product: {
-      product_name: ticketData.product_name ?? "",
-      product_sku: ticketData.product_sku ?? "",
-      ean: ticketData.ean ?? "",
-    },
+    original_product: original,
     replacement_product: replacementProduct,
+  };
+}
+
+function parseSelectedProduct(json: string | null) {
+  if (!json) return null;
+  try {
+    const decoded = JSON.parse(json) as Array<{
+      name?: string;
+      sku?: string;
+      ean?: string | number | null;
+      product_name?: string;
+      product_sku?: string;
+    }>;
+    if (!Array.isArray(decoded) || !decoded[0]) return null;
+    const first = decoded[0];
+    return {
+      name: String(first.product_name || first.name || "").trim(),
+      sku: String(first.product_sku || first.sku || "").trim(),
+      ean:
+        first.ean != null && String(first.ean).trim() && String(first.ean) !== "0"
+          ? String(first.ean).trim()
+          : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function resolveOriginalProduct(ticketData: {
+  selected_products_json: string | null;
+  product_name: string | null;
+  product_sku: string | null;
+  ean: string | null;
+}) {
+  const selected = parseSelectedProduct(ticketData.selected_products_json);
+  const claimedSku = selected?.sku || ticketData.product_sku?.trim() || "";
+  const claimedName = selected?.name || ticketData.product_name?.trim() || "";
+  const catalog = claimedSku
+    ? await lookupCatalogProductBySku(claimedSku)
+    : null;
+
+  const joinSku = ticketData.product_sku?.trim() || "";
+  const joinMatchesClaimed =
+    Boolean(claimedSku) &&
+    Boolean(joinSku) &&
+    compactSku(claimedSku) === compactSku(joinSku);
+
+  return {
+    product_name:
+      catalog?.product_name ||
+      (joinMatchesClaimed ? ticketData.product_name : null) ||
+      claimedName ||
+      "",
+    product_sku: claimedSku || joinSku || catalog?.product_sku || "",
+    ean:
+      catalog?.ean ||
+      (joinMatchesClaimed ? ticketData.ean : null) ||
+      selected?.ean ||
+      "",
   };
 }
 
