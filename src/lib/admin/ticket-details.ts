@@ -1,7 +1,10 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getTrackingStatusesForTicket } from "@/lib/admin/shipment-tracking";
 import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
 import { compactSku } from "@/lib/portal/sku-normalize";
+import { shopifyOrderIdVariants } from "@/lib/portal/verify-order";
+import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
 
 export type TicketDetail = {
   ticket_id: number;
@@ -208,6 +211,7 @@ export async function getTicketDetails(ticketNumber: string) {
     tracking,
     previousClaims,
     catalog,
+    shopifyDate,
   ] = await Promise.all([
     getTicketAttachments(ticketNumber),
     getTicketComments(ticket.ticket_id),
@@ -234,9 +238,13 @@ export async function getTicketDetails(ticketNumber: string) {
     claimedSku
       ? lookupCatalogProductBySku(claimedSku).catch(() => null)
       : Promise.resolve(null),
+    originalShopifyOrderDate(ticket),
   ]);
 
   applyCatalogToTicket(ticket, catalog);
+  if (shopifyDate && (!ticket.order_date || shopifyDate < ticket.order_date)) {
+    ticket.order_date = shopifyDate;
+  }
 
   return {
     ...ticket,
@@ -287,6 +295,40 @@ export async function getPreviousClaimsForOrder(
     console.error("[getPreviousClaimsForOrder]", error);
     return [];
   }
+}
+
+async function originalShopifyOrderDate(ticket: TicketDetail): Promise<Date | null> {
+  if ((ticket.source_platform ?? "").toLowerCase() !== "shopify") return null;
+  const ids = shopifyOrderIdVariants(
+    String(ticket.claim_number || ticket.order_number || ""),
+  );
+  if (ids.length === 0) return null;
+
+  let earliest: Date | null = null;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ d: Date | null }>>`
+      SELECT MIN(order_date) AS d
+      FROM shopify_orders
+      WHERE shopify_order_id IN (${Prisma.join(ids)})
+    `;
+    if (rows[0]?.d) earliest = new Date(rows[0].d);
+  } catch {
+    /* ignore local lookup */
+  }
+
+  try {
+    const live = await fetchShopifyAdminOrder(ids.find((id) => id.startsWith("#CK")) || ids[0]!);
+    if (live?.created_at) {
+      const created = new Date(live.created_at);
+      if (!Number.isNaN(created.getTime())) {
+        if (!earliest || created.getTime() < earliest.getTime()) earliest = created;
+      }
+    }
+  } catch {
+    /* Shopify down — keep local date */
+  }
+
+  return earliest && !Number.isNaN(earliest.getTime()) ? earliest : null;
 }
 
 function claimedSkuFromTicket(ticket: TicketDetail) {

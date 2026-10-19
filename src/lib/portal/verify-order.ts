@@ -5,6 +5,37 @@ import {
 } from "@/lib/portal/product-warranty";
 import { lookupShopifyOrderClassification } from "@/lib/portal/shopify-classification";
 import type { PortalOrderData } from "@/lib/portal/session";
+import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
+
+export function shopifyOrderIdVariants(raw: string) {
+  const trimmed = raw.trim();
+  const withoutClaim = trimmed.replace(/-[WRwr]$/, "");
+  const bare = withoutClaim.replace(/^#/, "");
+  const hashed = bare ? `#${bare}` : "";
+  return [...new Set([trimmed, withoutClaim, bare, hashed].filter(Boolean))];
+}
+
+function earliestDate(dates: Array<Date | string | null | undefined>) {
+  let earliest: Date | null = null;
+  for (const value of dates) {
+    if (!value) continue;
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) continue;
+    if (!earliest || d.getTime() < earliest.getTime()) earliest = d;
+  }
+  return earliest;
+}
+
+async function liveShopifyCreatedAt(orderId: string): Promise<Date | null> {
+  try {
+    const live = await fetchShopifyAdminOrder(orderId);
+    if (!live?.created_at) return null;
+    const d = new Date(live.created_at);
+    return Number.isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
 
 type VerifyResult =
   | PortalOrderData
@@ -390,7 +421,14 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
 
     const currentDate = startOfDayIst(new Date());
     const products: PortalOrderData["products"] = [];
-    let orderDate: Date | null = null;
+    let orderDate = earliestDate(orderItems.map((item) => item.order_date));
+    const liveCreated = await liveShopifyCreatedAt(hashedId);
+    if (
+      liveCreated &&
+      (!orderDate || liveCreated.getTime() < orderDate.getTime())
+    ) {
+      orderDate = liveCreated;
+    }
     let overallWarrantyExpiry: string | null = null;
     let overallDaysRemaining = 0;
 
@@ -401,20 +439,15 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
       let warrantyMonths = Number(
         useVariant ? (item.v_warranty ?? 0) : (item.p_warranty ?? 0),
       );
-      const productOrderDate = item.order_date
-        ? new Date(item.order_date)
-        : null;
+      const productOrderDate =
+        orderDate ?? (item.order_date ? new Date(item.order_date) : null);
 
-      if (!orderDate && productOrderDate) {
-        orderDate = productOrderDate;
-        const orderDay = startOfDayIst(productOrderDate);
-        if (currentDate >= addYears(orderDay, 1)) {
-          return {
-            success: false,
-            error:
-              "Warranty on products from this order has expired. Orders older than 1 year are no longer eligible for warranty claims.",
-          };
-        }
+      if (productOrderDate && currentDate >= addYears(startOfDayIst(productOrderDate), 1)) {
+        return {
+          success: false,
+          error:
+            "Warranty on products from this order has expired. Orders older than 1 year are no longer eligible for warranty claims.",
+        };
       }
 
       const [resolved, catalog] = await Promise.all([

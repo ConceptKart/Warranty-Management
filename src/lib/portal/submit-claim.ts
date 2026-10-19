@@ -782,6 +782,13 @@ export async function submitPortalClaim(
     }
 
     await prisma.$executeRaw`
+      UPDATE orders
+      SET order_date = ${orderDate}
+      WHERE order_id = ${orderId}
+        AND (order_date IS NULL OR order_date > ${orderDate})
+    `;
+
+    await prisma.$executeRaw`
       INSERT INTO warranty_tickets (
         ticket_number, order_id, claim_number, product_id, selected_products_json,
         ticket_type_id, issue_type_id, status_id,

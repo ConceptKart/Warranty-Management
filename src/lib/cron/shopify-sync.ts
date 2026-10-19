@@ -112,7 +112,11 @@ async function upsertShopifyRow(row: ShopifyRow) {
       ${row.qty}, ${row.ean}, NOW(), NOW()
     )
     ON DUPLICATE KEY UPDATE
-      order_date = VALUES(order_date),
+      order_date = IF(
+        order_date IS NULL,
+        VALUES(order_date),
+        LEAST(order_date, VALUES(order_date))
+      ),
       shopify_order_id = VALUES(shopify_order_id),
       sku = VALUES(sku),
       awb_number = VALUES(awb_number),
