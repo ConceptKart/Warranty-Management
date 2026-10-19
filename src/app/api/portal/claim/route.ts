@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPortalSession } from "@/lib/portal/get-session";
+import { getPortalSession, savePortalSession } from "@/lib/portal/get-session";
 import {
   buildShippingAddressFromParts,
   submitPortalClaim,
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   }
 
   session.ticketNumber = result.ticket_number;
-  await session.save();
+  await savePortalSession(session);
 
   return NextResponse.json({
     success: true,

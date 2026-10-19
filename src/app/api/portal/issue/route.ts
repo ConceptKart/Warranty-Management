@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPortalSession } from "@/lib/portal/get-session";
+import { getPortalSession, savePortalSession } from "@/lib/portal/get-session";
 import { validateSelectedProductsWarranty } from "@/lib/portal/validate-selected-products-warranty";
 
 export const runtime = "nodejs";
@@ -111,25 +111,28 @@ export async function POST(request: Request) {
     session.selectedProduct = selectedProduct;
     session.selectedProductsJson = selectedProductsJson;
 
-    // Store only the chosen issue (full list blows past cookie size limits)
+    // Do not store troubleshooting HTML in the cookie (4KB browser limit).
     if (
       issueTypeId.startsWith("ean_category_") &&
       body.selected_ean_issue?.issue
     ) {
+      const eanIndex = Number(issueTypeId.replace("ean_category_", ""));
       session.selectedEanIssue = {
         issue: String(body.selected_ean_issue.issue),
-        troubleshoot_steps: String(
-          body.selected_ean_issue.troubleshoot_steps ?? "",
-        ),
         category_name: body.selected_ean_issue.category_name
           ? String(body.selected_ean_issue.category_name)
           : undefined,
+        sku: selectedLines[0]?.sku
+          ? String(selectedLines[0].sku)
+          : sessionProducts[0]?.sku,
+        issue_index: Number.isFinite(eanIndex) ? eanIndex : undefined,
+        troubleshoot_steps: "",
       };
     } else {
       session.selectedEanIssue = undefined;
     }
 
-    await session.save();
+    await savePortalSession(session);
 
     const redirect =
       issueTypeId === "not_listed" ? "/claim" : "/troubleshoot";
@@ -137,13 +140,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, redirect });
   } catch (error) {
     console.error("[api/portal/issue]", error);
+    const raw = error instanceof Error ? error.message : "";
+    const cookieOverflow = /cookie length is too big/i.test(raw);
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to continue. Please try again.",
+        error: cookieOverflow
+          ? "Your session expired. Please verify your order again."
+          : raw || "Unable to continue. Please try again.",
       },
       { status: 500 },
     );

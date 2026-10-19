@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPortalSession } from "@/lib/portal/get-session";
+import { getPortalSession, savePortalSession } from "@/lib/portal/get-session";
 import { validateOrderInput, verifyOrder } from "@/lib/portal/verify-order";
 
 export const runtime = "nodejs";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   session.selectedProductsJson = undefined;
   session.selectedEanIssue = undefined;
   session.ticketNumber = undefined;
-  await session.save();
+  await savePortalSession(session);
 
   return NextResponse.json({ success: true, redirect: "/issue" });
 }

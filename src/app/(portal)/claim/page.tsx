@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { ClaimForm } from "@/components/portal/claim-form";
-import { getPortalSession } from "@/lib/portal/get-session";
+import { getPortalSession, savePortalSession } from "@/lib/portal/get-session";
 import { rehydrateShopifyCustomerIfBlank } from "@/lib/portal/rehydrate-shopify-customer";
 
 export default async function ClaimPage() {
@@ -13,7 +13,7 @@ export default async function ClaimPage() {
   const hydrated = await rehydrateShopifyCustomerIfBlank(session.orderData);
   if (hydrated.updated) {
     session.orderData = hydrated.orderData;
-    await session.save();
+    await savePortalSession(session);
   }
 
   const orderData = hydrated.orderData;

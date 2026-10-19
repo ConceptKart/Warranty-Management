@@ -69,8 +69,10 @@ export type PortalSessionData = {
    */
   selectedEanIssue?: {
     issue: string;
-    troubleshoot_steps: string;
+    troubleshoot_steps?: string;
     category_name?: string;
+    sku?: string;
+    issue_index?: number;
   };
 };
 

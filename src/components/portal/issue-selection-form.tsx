@@ -244,7 +244,6 @@ export function IssueSelectionForm({
         Number.isFinite(eanIndex) && eanIssues[eanIndex]
           ? {
               issue: eanIssues[eanIndex]!.issue,
-              troubleshoot_steps: eanIssues[eanIndex]!.troubleshoot_steps,
               category_name: eanIssues[eanIndex]!.category_name,
             }
           : null;

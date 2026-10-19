@@ -8,6 +8,8 @@ import {
   type PortalSessionData,
 } from "@/lib/portal/session";
 
+export { savePortalSession } from "@/lib/portal/compact-session";
+
 export async function getPortalSession() {
   assertSessionSecret();
   return getIronSession<PortalSessionData>(

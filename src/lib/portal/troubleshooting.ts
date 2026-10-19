@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { fetchEanCategoryIssues } from "@/lib/portal/ean-category-issues";
 
 export type TroubleshootingResolution = {
   step_number: number;
@@ -61,42 +62,68 @@ async function getCategoryBasedIssueDetails(
   };
 }
 
-function getEanCategoryIssueDetails(
+async function getEanCategoryIssueDetails(
   issueId: string,
   selectedEanIssue:
     | {
         issue: string;
-        troubleshoot_steps: string;
+        troubleshoot_steps?: string;
         category_name?: string;
+        sku?: string;
+        issue_index?: number;
       }
     | undefined,
-): TroubleshootingIssue | null {
-  if (!selectedEanIssue?.issue) {
-    // Fallback: still allow flow with a generic message if session lost the steps
-    if (issueId.startsWith("ean_category_")) {
-      return {
-        id: issueId,
-        issue_type: "Selected product issue",
-        category: "Product Specific",
-        resolutions: [
-          {
-            step_number: 1,
-            description:
-              "Please review common checks for your product (power, connections, alternate device). If the issue continues, proceed to submit a warranty claim.",
-          },
-        ],
-      };
+): Promise<TroubleshootingIssue | null> {
+  let steps = selectedEanIssue?.troubleshoot_steps?.trim() || "";
+  let issueName = selectedEanIssue?.issue || "";
+  let category = selectedEanIssue?.category_name || "Product Specific";
+
+  if (!steps && selectedEanIssue?.sku) {
+    try {
+      const loaded = await fetchEanCategoryIssues(selectedEanIssue.sku);
+      const idx = selectedEanIssue.issue_index;
+      const match =
+        (idx != null && loaded.issues[idx]) ||
+        loaded.issues.find((row) => row.issue === selectedEanIssue.issue) ||
+        loaded.issues[0];
+      if (match) {
+        steps = match.troubleshoot_steps ?? "";
+        issueName = issueName || match.issue;
+        category = category || match.category_name || "Product Specific";
+      }
+    } catch {
+      /* keep fallback below */
     }
+  }
+
+  if (!issueName && !issueId.startsWith("ean_category_")) {
     return null;
   }
 
-  const steps = selectedEanIssue.troubleshoot_steps ?? "";
+  if (!issueName) {
+    return {
+      id: issueId,
+      issue_type: "Selected product issue",
+      category: "Product Specific",
+      resolutions: [
+        {
+          step_number: 1,
+          description:
+            "Please review common checks for your product (power, connections, alternate device). If the issue continues, proceed to submit a warranty claim.",
+        },
+      ],
+    };
+  }
+
   return {
     id: issueId,
-    issue_type: selectedEanIssue.issue || "Unknown Issue",
-    category: selectedEanIssue.category_name || "Product Specific",
+    issue_type: issueName || "Unknown Issue",
+    category,
     troubleshooting_steps: steps,
-    resolutions: parseTroubleshootingSteps(steps),
+    resolutions: parseTroubleshootingSteps(
+      steps ||
+        "Please review common checks for your product (power, connections, alternate device). If the issue continues, proceed to submit a warranty claim.",
+    ),
   };
 }
 
@@ -145,8 +172,10 @@ export async function getTroubleshootingIssueDetails(
   issueId: string,
   selectedEanIssue?: {
     issue: string;
-    troubleshoot_steps: string;
+    troubleshoot_steps?: string;
     category_name?: string;
+    sku?: string;
+    issue_index?: number;
   },
 ): Promise<TroubleshootingIssue | null> {
   if (!issueId) return null;
