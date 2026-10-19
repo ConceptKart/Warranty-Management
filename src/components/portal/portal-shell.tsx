@@ -51,11 +51,11 @@ export function PortalShell({
                 <Image
                   src="/images/conceptkart-logo.png"
                   alt="ConceptKart Logo"
-                  width={338}
-                  height={80}
+                  width={90}
+                  height={86}
                   className="img-fluid logo-responsive"
                   priority
-                  style={{ width: 338, height: "auto", cursor: "pointer" }}
+                  style={{ width: 90, height: "auto", cursor: "pointer" }}
                 />
               </a>
             </div>

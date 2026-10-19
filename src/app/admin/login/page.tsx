@@ -92,6 +92,14 @@ export default function AdminLoginPage() {
         <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:px-6 tw:py-20 tw:sm:px-10">
           <div className="tw:w-full tw:max-w-[400px]">
             <header className="tw:mb-8">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/conceptkart-logo.png"
+                alt="ConceptKart"
+                width={64}
+                height={61}
+                className="tw:mb-5"
+              />
               <h2 className="tw:mb-2 tw:text-3xl tw:font-bold tw:tracking-tight tw:text-slate-950">
                 Welcome back
               </h2>

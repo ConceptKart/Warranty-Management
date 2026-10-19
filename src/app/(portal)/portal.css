@@ -24,8 +24,7 @@
 
 .portal-body .logo-responsive {
   transition: all 0.3s ease;
-  max-width: 450px !important;
-  width: 338px;
+  width: 90px;
   max-width: 100% !important;
   height: auto !important;
 }

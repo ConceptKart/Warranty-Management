@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Concept Kart Warranty — Next.js",
   description: "Warranty Management System V2 (Next.js migration)",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/images/conceptkart-logo.png", type: "image/png" },
+    ],
+    apple: "/images/conceptkart-logo.png",
+  },
 };
 
 export const viewport: Viewport = {

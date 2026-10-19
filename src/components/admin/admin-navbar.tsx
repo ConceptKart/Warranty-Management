@@ -72,7 +72,18 @@ export function AdminNavbar({
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
       <div className="container-fluid">
-        <Link className="navbar-brand" href="/admin" onClick={closeNav}>
+        <Link
+          className="navbar-brand d-flex align-items-center gap-2"
+          href="/admin"
+          onClick={closeNav}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/conceptkart-logo.png"
+            alt="ConceptKart"
+            width={28}
+            height={27}
+          />
           <span className="d-none d-sm-inline">Warranty Admin</span>
           <span className="d-inline d-sm-none">Admin</span>
         </Link>
