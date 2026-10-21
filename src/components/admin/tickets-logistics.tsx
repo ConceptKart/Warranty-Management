@@ -134,6 +134,17 @@ export function TicketsLogistics({
   const allIds = useMemo(() => tickets.map((t) => t.ticket_id), [tickets]);
   const allSelected =
     allIds.length > 0 && allIds.every((id) => selected.includes(id));
+  const packerAwbCounts = useMemo(() => {
+    const total = packerOrders.filter((o) => o.forward_awb).length;
+    const handedOver = packerOrders.filter(
+      (o) => o.forward_awb && o.handed_over_to,
+    ).length;
+    return {
+      total,
+      handedOver,
+      pending: total - handedOver,
+    };
+  }, [packerOrders]);
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? allIds : []);
@@ -816,6 +827,19 @@ export function TicketsLogistics({
           {packerError ? (
             <div className="alert alert-danger py-2">{packerError}</div>
           ) : null}
+
+          <p className="text-muted mb-3 d-flex flex-wrap align-items-center gap-2">
+            <span>Tickets with forward AWB assigned.</span>
+            <span className="badge bg-primary">
+              {packerAwbCounts.total} AWB{packerAwbCounts.total === 1 ? "" : "s"}
+            </span>
+            <span className="badge bg-warning text-dark">
+              {packerAwbCounts.pending} pending
+            </span>
+            <span className="badge bg-success">
+              {packerAwbCounts.handedOver} handed over
+            </span>
+          </p>
 
           <div className="table-responsive">
             <table className="table table-sm table-hover">
