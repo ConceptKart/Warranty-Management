@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { indianMobileDigits } from "@/lib/tickets/ticket-number";
 
 export type ShipwayCreateResult =
   | {
@@ -166,19 +167,115 @@ function isShipwaySuccess(decoded: Record<string, unknown> | null) {
   return false;
 }
 
+function looksLikeAwb(value: unknown) {
+  const text = String(value ?? "").trim();
+  return Boolean(text) && /^[A-Za-z0-9-]{5,20}$/.test(text) && !/^\d{6}$/.test(text);
+}
+
+function firstAwb(...values: unknown[]) {
+  for (const value of values) {
+    if (looksLikeAwb(value)) return String(value).trim();
+  }
+  return "";
+}
+
 function extractReturnAwb(decoded: Record<string, unknown> | null) {
   if (!decoded) return "";
   const awbResp = (decoded.awb_response ?? {}) as Record<string, unknown>;
   const createResp = (decoded.create_return_response ?? {}) as Record<string, unknown>;
-  return String(
-    awbResp.AWB ??
-      awbResp.awb ??
-      decoded.awb_number ??
-      decoded.AWB ??
-      createResp.awb ??
-      createResp.AWB ??
-      "",
+  return firstAwb(
+    awbResp.AWB,
+    awbResp.awb,
+    awbResp.awb_number,
+    awbResp.carrier_awb,
+    awbResp.tracking_number,
+    decoded.awb_number,
+    decoded.AWB,
+    decoded.awb,
+    decoded.tracking_number,
+    createResp.awb,
+    createResp.AWB,
+    createResp.awb_number,
+    createResp.tracking_number,
   );
+}
+
+function extractForwardAwb(decoded: Record<string, unknown> | null) {
+  if (!decoded) return "";
+  const awbResp = (decoded.awb_response ?? {}) as Record<string, unknown>;
+  const orderResp = (decoded.order_response ?? {}) as Record<string, unknown>;
+  const dataResp = (decoded.data ?? {}) as Record<string, unknown>;
+  return firstAwb(
+    awbResp.AWB,
+    awbResp.awb,
+    awbResp.awb_number,
+    awbResp.carrier_awb,
+    awbResp.tracking_number,
+    decoded.AWB,
+    decoded.awb,
+    decoded.awb_number,
+    decoded.tracking_number,
+    orderResp.AWB,
+    orderResp.awb,
+    orderResp.awb_number,
+    orderResp.carrier_awb,
+    orderResp.tracking_number,
+    dataResp.AWB,
+    dataResp.awb,
+    dataResp.awb_number,
+    dataResp.tracking_number,
+  );
+}
+
+async function fetchForwardAwbByOrderId(orderId: string) {
+  const trimmed = orderId.trim();
+  if (!trimmed) return { awb: "", courier: "" };
+  const config = await getShipwayConfig();
+  if (!config.api_key || !config.email) return { awb: "", courier: "" };
+
+  const auth = Buffer.from(`${config.email}:${config.api_key}`).toString("base64");
+  const urls = [
+    `https://app.shipway.com/api/orders?order_id=${encodeURIComponent(trimmed)}`,
+    `https://app.shipway.com/api/getorders?order_id=${encodeURIComponent(trimmed)}`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const raw = await response.text();
+      let body: unknown = null;
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        body = raw;
+      }
+      const decoded =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const awb = extractForwardAwb(decoded);
+      if (awb) {
+        const orderResp = (decoded?.order_response ?? {}) as Record<string, unknown>;
+        return {
+          awb,
+          courier: String(
+            decoded?.courier_name ?? orderResp.courier_name ?? "",
+          ),
+        };
+      }
+    } catch {
+      /* try the next Shipway lookup */
+    }
+  }
+
+  return { awb: "", courier: "" };
 }
 
 /** Shipway carrier list: 1 = Blue Dart (same as ticket-details.php pickup path). */
@@ -421,7 +518,7 @@ export async function createForwardShipment(
     billing_country: "India",
     billing_firstname: firstName,
     billing_lastname: lastName,
-    billing_phone: input.customer_phone,
+    billing_phone: indianMobileDigits(input.customer_phone) || input.customer_phone,
     billing_zipcode: input.customer_zipcode,
     shipping_address: input.customer_address,
     shipping_city: input.customer_city,
@@ -429,7 +526,7 @@ export async function createForwardShipment(
     shipping_country: "India",
     shipping_firstname: firstName,
     shipping_lastname: lastName,
-    shipping_phone: input.customer_phone,
+    shipping_phone: indianMobileDigits(input.customer_phone) || input.customer_phone,
     shipping_zipcode: input.customer_zipcode,
     order_weight: String(input.weight ?? 100),
     box_length: String(input.box_length ?? 10),
@@ -455,21 +552,29 @@ export async function createForwardShipment(
   if (result.httpCode >= 200 && result.httpCode < 300 && isShipwaySuccess(decoded)) {
     const awbResp = (decoded?.awb_response ?? {}) as Record<string, unknown>;
     const orderResp = (decoded?.order_response ?? {}) as Record<string, unknown>;
-    const awbNumber = String(
-      awbResp.AWB ??
-        awbResp.awb ??
-        decoded?.AWB ??
-        decoded?.awb ??
-        orderResp.AWB ??
-        orderResp.awb ??
-        "",
-    );
-    const courierName = String(
+    let awbNumber = extractForwardAwb(decoded);
+    let courierName = String(
       awbResp.courier_name ??
         decoded?.courier_name ??
         orderResp.courier_name ??
         "",
     );
+
+    if (!awbNumber) {
+      const lookedUp = await fetchForwardAwbByOrderId(String(payload.order_id ?? ""));
+      awbNumber = lookedUp.awb;
+      courierName = courierName || lookedUp.courier;
+    }
+
+    if (!awbNumber) {
+      return {
+        success: false,
+        error:
+          "Shipway accepted the forward request but returned no AWB number",
+        http_code: result.httpCode,
+        data: decoded,
+      };
+    }
 
     return {
       success: true,

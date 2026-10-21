@@ -232,6 +232,46 @@ test("return pickup payload matches the PHP Accepted path", async () => {
   assert.equal(body.box_length, 13);
 });
 
+test("forward shipment reads AWB from order_response.tracking_number", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 1,
+      order_response: {
+        tracking_number: "90706001551",
+        courier_name: "Bluedart",
+      },
+    }),
+  );
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "90706001551");
+});
+
+test("forward shipment looks up AWB by order id when create omits it", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith((url) => {
+    if (String(url).includes("/api/v2orders")) {
+      return jsonResponse({ success: 1, message: "Order created" });
+    }
+    return jsonResponse({
+      success: 1,
+      awb: "90706001551",
+      courier_name: "Bluedart",
+    });
+  });
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "90706001551");
+  assert.ok(net.calls.some((call) => String(call.url).includes("order_id=")));
+});
+
 test("a Shipway success without AWB is treated as failure, not Requested", async () => {
   process.env.SHIPWAY_API_KEY = KEY;
   process.env.SHIPWAY_EMAIL = EMAIL;

@@ -566,8 +566,10 @@ export function parseCustomerAddress(rawAddress: string) {
   let address = rawAddress.trim();
 
   for (let i = parts.length - 1; i >= 0; i--) {
-    if (/^\d{6}$/.test(parts[i]!)) {
-      pincode = parts[i]!;
+    const standalone = parts[i]!;
+    const embedded = standalone.match(/\b(\d{6})\b/);
+    if (/^\d{6}$/.test(standalone) || embedded) {
+      pincode = /^\d{6}$/.test(standalone) ? standalone : embedded![1]!;
       state = parts[i - 1] ?? "";
       city = parts[i - 2] ?? "";
       address = parts.slice(0, Math.max(0, i - 2)).join(", ");
@@ -575,8 +577,10 @@ export function parseCustomerAddress(rawAddress: string) {
     }
   }
 
-  if (!pincode && parts.length >= 3) {
-    pincode = parts[parts.length - 1]!;
+  if (!/^\d{6}$/.test(pincode) && parts.length >= 3) {
+    const last = parts[parts.length - 1]!;
+    const embedded = last.match(/\b(\d{6})\b/);
+    pincode = embedded?.[1] ?? last;
     state = parts[parts.length - 2]!;
     city = parts[parts.length - 3]!;
     address = parts.slice(0, parts.length - 3).join(", ");

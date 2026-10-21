@@ -102,7 +102,7 @@ export async function bulkForwardShipments(
 
   for (const td of tickets) {
     const parsed = parseCustomerAddress(td.customer_address || "");
-    if (!parsed.city.trim() || !parsed.state.trim() || !parsed.pincode.trim()) {
+    if (!parsed.city.trim() || !parsed.state.trim() || !/^\d{6}$/.test(parsed.pincode)) {
       results.push({
         ticket_id: td.ticket_id,
         ticket_number: td.ticket_number,
@@ -123,7 +123,7 @@ export async function bulkForwardShipments(
       customer_name: `${td.first_name ?? ""} ${td.last_name ?? ""}`.trim(),
       customer_email: td.customer_email || "",
       customer_phone: td.customer_phone || "",
-      customer_address: td.customer_address || "",
+      customer_address: parsed.address || td.customer_address || "",
       customer_city: parsed.city,
       customer_state: parsed.state,
       customer_zipcode: parsed.pincode,

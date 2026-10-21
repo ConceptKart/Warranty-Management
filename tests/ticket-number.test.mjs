@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { parseCustomerAddress } from "@/lib/admin/ticket-details";
 import {
   indianMobileDigits,
   swapOrderTypeSuffix,
@@ -28,4 +29,13 @@ test("indianMobileDigits keeps the last 10 digits after country code", () => {
   assert.equal(indianMobileDigits("918800456130"), "8800456130");
   assert.equal(indianMobileDigits("8800456130"), "8800456130");
   assert.equal(indianMobileDigits("08800456130"), "8800456130");
+});
+
+test("parseCustomerAddress finds a 6-digit pincode in Amazon address blobs", () => {
+  const parsed = parseCustomerAddress(
+    "Ganesh QA 99/9 1st Cross Road, M Narayana Swamy Layout, Byatarayanapura BENGALURU, KARNATAKA 560092 India, Bengaluru, Karnataka, 560092",
+  );
+  assert.equal(parsed.pincode, "560092");
+  assert.equal(parsed.city, "Bengaluru");
+  assert.equal(parsed.state, "Karnataka");
 });
