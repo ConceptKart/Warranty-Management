@@ -151,13 +151,27 @@ test("pickups request Blue Dart (carrier_id 1) by default", async () => {
     }),
   );
 
-  for (const create of [createReturnShipment, createForwardShipment]) {
-    net.calls.length = 0;
-    const result = await create(shipment);
-    assert.equal(result.success, true);
-    assert.equal(net.calls.length, 1);
-    assert.equal(postedCarrierId(net.calls[0]), "1");
-  }
+  const result = await createReturnShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(net.calls.length, 1);
+  assert.equal(postedCarrierId(net.calls[0]), "1");
+});
+
+test("forward shipments send a blank carrier_id like PHP", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith(() =>
+    jsonResponse({
+      success: 1,
+      order_response: { tracking_number: "90706001551", courier_name: "Bluedart" },
+    }),
+  );
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "90706001551");
+  assert.equal(postedCarrierId(net.calls[0]), "");
 });
 
 test("unserviceable Blue Dart does not retry with a blank carrier_id", async () => {
@@ -270,6 +284,82 @@ test("forward shipment looks up AWB by order id when create omits it", async () 
   assert.equal(result.success, true);
   assert.equal(result.awb_number, "90706001551");
   assert.ok(net.calls.some((call) => String(call.url).includes("order_id=")));
+});
+
+test("forward shipment reads AWB from getorders message arrays", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith((url) => {
+    if (String(url).includes("/api/v2orders")) {
+      return jsonResponse({ success: 1, message: "Order created" });
+    }
+    return jsonResponse({
+      success: 1,
+      message: [
+        {
+          order_id: "TEST-ORDER-1",
+          tracking_number: "90706001551",
+          courier_name: "Bluedart",
+        },
+      ],
+    });
+  });
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "90706001551");
+  assert.equal(result.courier_name, "Bluedart");
+});
+
+test("forward shipment retries ticket order id when first create has no AWB", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith((url, init) => {
+    if (String(url).includes("/api/v2orders")) {
+      const orderId = JSON.parse(init.body).order_id;
+      if (orderId === "TEST-ORDER-1") {
+        return jsonResponse({ success: 1, message: "Order created" });
+      }
+      return jsonResponse({
+        success: 1,
+        order_response: {
+          tracking_number: "90706009999",
+          courier_name: "Delhivery",
+        },
+      });
+    }
+    return jsonResponse({ success: 1, message: [] });
+  });
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, true);
+  assert.equal(result.awb_number, "90706009999");
+  const v2Calls = net.calls.filter((call) => String(call.url).includes("/api/v2orders"));
+  assert.equal(v2Calls.length, 2);
+  assert.equal(JSON.parse(v2Calls[0].init.body).order_id, "TEST-ORDER-1");
+  assert.equal(JSON.parse(v2Calls[1].init.body).order_id, "WR-TEST-0001P");
+  assert.equal(postedCarrierId(v2Calls[0]), "");
+  assert.equal(postedCarrierId(v2Calls[1]), "");
+});
+
+test("forward shipment fails after lookup and unique-id retry still have no AWB", async () => {
+  process.env.SHIPWAY_API_KEY = KEY;
+  process.env.SHIPWAY_EMAIL = EMAIL;
+  setQueryRaw(async () => []);
+  net.respondWith((url) => {
+    if (String(url).includes("/api/v2orders")) {
+      return jsonResponse({ success: 1, message: "Order created" });
+    }
+    return jsonResponse({ success: 1, message: [] });
+  });
+
+  const result = await createForwardShipment(shipment);
+  assert.equal(result.success, false);
+  assert.match(result.error, /no AWB/i);
+  const v2Calls = net.calls.filter((call) => String(call.url).includes("/api/v2orders"));
+  assert.equal(v2Calls.length, 2);
 });
 
 test("a Shipway success without AWB is treated as failure, not Requested", async () => {

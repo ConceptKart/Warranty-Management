@@ -172,11 +172,57 @@ function looksLikeAwb(value: unknown) {
   return Boolean(text) && /^[A-Za-z0-9-]{5,20}$/.test(text) && !/^\d{6}$/.test(text);
 }
 
+const AWB_FIELD_NAMES = [
+  "AWB",
+  "awb",
+  "awb_number",
+  "carrier_awb",
+  "tracking_number",
+] as const;
+
 function firstAwb(...values: unknown[]) {
   for (const value of values) {
     if (looksLikeAwb(value)) return String(value).trim();
   }
   return "";
+}
+
+function walkUnknown(value: unknown, visit: (record: Record<string, unknown>) => string, depth = 0): string {
+  if (depth > 6 || value == null) return "";
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = walkUnknown(item, visit, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  const direct = visit(record);
+  if (direct) return direct;
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") {
+      const found = walkUnknown(nested, visit, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
+function extractAwbFromUnknown(value: unknown) {
+  return walkUnknown(value, (record) => {
+    for (const key of AWB_FIELD_NAMES) {
+      if (looksLikeAwb(record[key])) return String(record[key]).trim();
+    }
+    return "";
+  });
+}
+
+function extractCourierFromUnknown(value: unknown) {
+  return walkUnknown(value, (record) => {
+    const name = String(record.courier_name ?? record.carrier_name ?? "").trim();
+    return name;
+  });
 }
 
 function extractReturnAwb(decoded: Record<string, unknown> | null) {
@@ -200,31 +246,29 @@ function extractReturnAwb(decoded: Record<string, unknown> | null) {
   );
 }
 
-function extractForwardAwb(decoded: Record<string, unknown> | null) {
-  if (!decoded) return "";
-  const awbResp = (decoded.awb_response ?? {}) as Record<string, unknown>;
-  const orderResp = (decoded.order_response ?? {}) as Record<string, unknown>;
-  const dataResp = (decoded.data ?? {}) as Record<string, unknown>;
-  return firstAwb(
-    awbResp.AWB,
-    awbResp.awb,
-    awbResp.awb_number,
-    awbResp.carrier_awb,
-    awbResp.tracking_number,
-    decoded.AWB,
-    decoded.awb,
-    decoded.awb_number,
-    decoded.tracking_number,
-    orderResp.AWB,
-    orderResp.awb,
-    orderResp.awb_number,
-    orderResp.carrier_awb,
-    orderResp.tracking_number,
-    dataResp.AWB,
-    dataResp.awb,
-    dataResp.awb_number,
-    dataResp.tracking_number,
+function extractForwardAwb(decoded: unknown) {
+  return extractAwbFromUnknown(decoded);
+}
+
+function isDuplicateOrderMessage(message: string) {
+  const text = message.toLowerCase();
+  return (
+    text.includes("already exist") ||
+    text.includes("already created") ||
+    text.includes("duplicate order") ||
+    text.includes("order id already") ||
+    text.includes("order already")
   );
+}
+
+function forwardOrderIdCandidates(input: ShipwayShipmentInput) {
+  const primary = String(input.order_id || "").trim();
+  const ticketBased = input.ticket_number?.trim()
+    ? `${input.ticket_number.trim()}P`
+    : "";
+  const ids = [primary];
+  if (ticketBased && ticketBased !== primary) ids.push(ticketBased);
+  return ids.filter(Boolean);
 }
 
 async function fetchForwardAwbByOrderId(orderId: string) {
@@ -258,16 +302,11 @@ async function fetchForwardAwbByOrderId(orderId: string) {
       } catch {
         body = raw;
       }
-      const decoded =
-        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-      const awb = extractForwardAwb(decoded);
+      const awb = extractForwardAwb(body);
       if (awb) {
-        const orderResp = (decoded?.order_response ?? {}) as Record<string, unknown>;
         return {
           awb,
-          courier: String(
-            decoded?.courier_name ?? orderResp.courier_name ?? "",
-          ),
+          courier: extractCourierFromUnknown(body),
         };
       }
     } catch {
@@ -276,6 +315,17 @@ async function fetchForwardAwbByOrderId(orderId: string) {
   }
 
   return { awb: "", courier: "" };
+}
+
+async function resolveForwardAwb(orderId: string, decoded: unknown) {
+  let awb = extractForwardAwb(decoded);
+  let courier = extractCourierFromUnknown(decoded);
+  if (!awb) {
+    const lookedUp = await fetchForwardAwbByOrderId(orderId);
+    awb = lookedUp.awb;
+    courier = courier || lookedUp.courier;
+  }
+  return { awb, courier };
 }
 
 /** Shipway carrier list: 1 = Blue Dart (same as ticket-details.php pickup path). */
@@ -483,6 +533,9 @@ export async function createReturnShipment(
 
 /**
  * Port of ShipwayService::createForwardShipment (v2orders API).
+ * PHP always sends a blank carrier_id so Shipway auto-assigns a partner
+ * and typically returns an AWB. Forcing Blue Dart leaves many Amazon
+ * forwards in Requested with no tracking number.
  */
 export async function createForwardShipment(
   input: ShipwayShipmentInput,
@@ -502,6 +555,7 @@ export async function createForwardShipment(
 
   const payload = {
     order_id: input.order_id || "",
+    carrier_id: "",
     warehouse_id: "56024",
     return_warehouse_id: "56024",
     products,
@@ -535,53 +589,65 @@ export async function createForwardShipment(
     order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
   };
 
-  const { posted: result, carrierIdUsed } = await postShipwayPreferringBlueDart(
-    "https://app.shipway.com/api/v2orders",
-    payload,
-  );
+  const orderIds = forwardOrderIdCandidates(input);
+  let lastDecoded: Record<string, unknown> | null = null;
+  let lastHttpCode = 0;
+  let lastRaw = "";
 
-  if (result.error) {
-    return { success: false, error: `Connection error: ${result.error}`, http_code: 0 };
-  }
+  for (const orderId of orderIds) {
+    const result = await postShipway("https://app.shipway.com/api/v2orders", {
+      ...payload,
+      order_id: orderId,
+      carrier_id: "",
+    });
 
-  const decoded =
-    result.body && typeof result.body === "object"
-      ? (result.body as Record<string, unknown>)
-      : null;
-
-  if (result.httpCode >= 200 && result.httpCode < 300 && isShipwaySuccess(decoded)) {
-    const awbResp = (decoded?.awb_response ?? {}) as Record<string, unknown>;
-    const orderResp = (decoded?.order_response ?? {}) as Record<string, unknown>;
-    let awbNumber = extractForwardAwb(decoded);
-    let courierName = String(
-      awbResp.courier_name ??
-        decoded?.courier_name ??
-        orderResp.courier_name ??
-        "",
-    );
-
-    if (!awbNumber) {
-      const lookedUp = await fetchForwardAwbByOrderId(String(payload.order_id ?? ""));
-      awbNumber = lookedUp.awb;
-      courierName = courierName || lookedUp.courier;
+    if (result.error) {
+      return { success: false, error: `Connection error: ${result.error}`, http_code: 0 };
     }
 
-    if (!awbNumber) {
+    const decoded =
+      result.body && typeof result.body === "object"
+        ? (result.body as Record<string, unknown>)
+        : null;
+    lastDecoded = decoded;
+    lastHttpCode = result.httpCode;
+    lastRaw = result.raw;
+
+    const accepted =
+      result.httpCode >= 200 &&
+      result.httpCode < 300 &&
+      isShipwaySuccess(decoded);
+    const message = shipwayErrorMessage(
+      decoded,
+      result.raw,
+      "Failed to create forward shipment on Shipway",
+    );
+
+    if (!accepted && !isDuplicateOrderMessage(message)) {
       return {
         success: false,
-        error:
-          "Shipway accepted the forward request but returned no AWB number",
+        error: message,
         http_code: result.httpCode,
         data: decoded,
       };
     }
 
+    const { awb: awbNumber, courier: courierName } = await resolveForwardAwb(
+      orderId,
+      decoded ?? result.body,
+    );
+    if (!awbNumber) {
+      continue;
+    }
+
+    const awbResp = (decoded?.awb_response ?? {}) as Record<string, unknown>;
+    const orderResp = (decoded?.order_response ?? {}) as Record<string, unknown>;
     return {
       success: true,
       message: "Forward shipment created on Shipway successfully",
       awb_number: awbNumber,
       courier_name: courierName,
-      carrier_id: String(awbResp.carrier_id ?? carrierIdUsed),
+      carrier_id: String(awbResp.carrier_id ?? ""),
       shipping_url: String(
         decoded?.shipping_url ??
           awbResp.shipping_url ??
@@ -593,16 +659,10 @@ export async function createForwardShipment(
     };
   }
 
-  const message = shipwayErrorMessage(
-    decoded,
-    result.raw,
-    "Failed to create forward shipment on Shipway",
-  );
-
   return {
     success: false,
-    error: message,
-    http_code: result.httpCode,
-    data: decoded,
+    error: "Shipway accepted the forward request but returned no AWB number",
+    http_code: lastHttpCode,
+    data: lastDecoded ?? lastRaw,
   };
 }
