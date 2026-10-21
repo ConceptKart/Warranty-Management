@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/db";
 import { queryExternalShipway } from "@/lib/db-external-shipway";
+import {
+  fetchShopifyAdminOrder,
+  shopifyFulfillmentDelivery,
+} from "@/lib/shopify/admin-client";
 
 export type ShopifyClassification = {
   type: "warranty" | "replacement" | "blocked";
@@ -16,6 +20,56 @@ export type ShopifyClassification = {
 function daysSince(from: Date, to: Date) {
   const ms = to.getTime() - from.getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+function classifyFromDeliveryDate(
+  delivered: Date,
+  awb: string,
+  status: string,
+): ShopifyClassification {
+  const now = new Date();
+  const since = daysSince(delivered, now);
+  const cutoff = new Date(delivered);
+  cutoff.setDate(cutoff.getDate() + 10);
+  if (now <= cutoff) {
+    return {
+      type: "replacement",
+      awb,
+      status,
+      updated_at: delivered.toISOString(),
+      days_since_delivery: since,
+      days_remaining: Math.max(0, 10 - since),
+      reason: "shopify_delivered",
+    };
+  }
+  return {
+    type: "warranty",
+    awb,
+    status,
+    updated_at: delivered.toISOString(),
+    days_since_delivery: since,
+    days_remaining: 0,
+    reason: "shopify_delivered",
+  };
+}
+
+async function classifyFromShopifyDelivery(
+  shopifyOrderId: string,
+  awb: string,
+): Promise<ShopifyClassification | null> {
+  try {
+    const live = await fetchShopifyAdminOrder(shopifyOrderId);
+    const delivery = shopifyFulfillmentDelivery(live);
+    if (!delivery.delivered || !delivery.deliveredAt) return null;
+    return classifyFromDeliveryDate(
+      delivery.deliveredAt,
+      awb,
+      "DELIVERED",
+    );
+  } catch (error) {
+    console.error("lookupShopifyOrderClassification shopify delivery:", error);
+    return null;
+  }
 }
 
 /**
@@ -65,6 +119,8 @@ export async function lookupShopifyOrderClassification(
     const normalized = rawStatus.trim().toUpperCase();
 
     if (normalized !== "DELIVERED") {
+      const fromShopify = await classifyFromShopifyDelivery(shopifyOrderId, awb);
+      if (fromShopify) return fromShopify;
       return {
         type: "blocked",
         awb,

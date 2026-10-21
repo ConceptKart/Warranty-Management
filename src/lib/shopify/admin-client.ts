@@ -11,9 +11,14 @@ export type ShopifyAdminOrder = {
   email?: string;
   contact_email?: string;
   phone?: string;
+  fulfillment_status?: string | null;
   fulfillments?: Array<{
     tracking_number?: string;
     tracking_numbers?: string[];
+    shipment_status?: string | null;
+    display_status?: string | null;
+    delivered_at?: string | null;
+    updated_at?: string | null;
   }>;
   shipping_address?: ShopifyAddress;
   billing_address?: ShopifyAddress;
@@ -117,13 +122,22 @@ function mapGraphqlOrder(node: Record<string, unknown>): ShopifyAdminOrder {
     email: String(node.email ?? customer?.email ?? ""),
     phone: String(node.phone ?? customer?.phone ?? ""),
     fulfillments: fulfillments.map((f) => {
-      const row = (f ?? {}) as { trackingInfo?: Array<{ number?: string }> };
+      const row = (f ?? {}) as {
+        trackingInfo?: Array<{ number?: string }>;
+        displayStatus?: string | null;
+        deliveredAt?: string | null;
+        updatedAt?: string | null;
+      };
       const numbers = (row.trackingInfo ?? [])
         .map((t) => t.number)
         .filter((n): n is string => Boolean(n));
       return {
         tracking_number: numbers[0],
         tracking_numbers: numbers,
+        display_status: row.displayStatus ?? null,
+        shipment_status: row.displayStatus ?? null,
+        delivered_at: row.deliveredAt ?? null,
+        updated_at: row.updatedAt ?? null,
       };
     }),
     shipping_address: shipping
@@ -216,7 +230,12 @@ export async function fetchShopifyAdminOrder(
         createdAt
         email
         phone
-        fulfillments(first: 10) { trackingInfo { number } }
+        fulfillments(first: 10) {
+          displayStatus
+          deliveredAt
+          updatedAt
+          trackingInfo { number }
+        }
         shippingAddress { firstName lastName address1 address2 city province zip phone }
         billingAddress { firstName lastName address1 address2 city province zip phone }
         customer { firstName lastName email phone }
@@ -246,4 +265,41 @@ export async function fetchShopifyAdminOrder(
   }
 
   return null;
+}
+
+function isDeliveredStatus(value: unknown) {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  return text === "delivered";
+}
+
+/** Shopify Admin delivery, not mere fulfilled/shipped. */
+export function shopifyFulfillmentDelivery(order: ShopifyAdminOrder | null) {
+  if (!order) return { delivered: false, deliveredAt: null as Date | null };
+
+  for (const fulfillment of order.fulfillments ?? []) {
+    const stamp = fulfillment.delivered_at || "";
+    const stamped = stamp ? new Date(stamp) : null;
+    const hasDeliveredAt = Boolean(stamped && !Number.isNaN(stamped.getTime()));
+    if (
+      hasDeliveredAt ||
+      isDeliveredStatus(fulfillment.shipment_status) ||
+      isDeliveredStatus(fulfillment.display_status)
+    ) {
+      const fallback = fulfillment.updated_at
+        ? new Date(fulfillment.updated_at)
+        : null;
+      const deliveredAt =
+        hasDeliveredAt
+          ? stamped
+          : fallback && !Number.isNaN(fallback.getTime())
+            ? fallback
+            : new Date();
+      return { delivered: true, deliveredAt };
+    }
+  }
+
+  return { delivered: false, deliveredAt: null as Date | null };
 }
