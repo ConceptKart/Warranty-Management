@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { importShopifyOrderDirect } from "@/lib/admin/shopify-orders";
 import {
   lookupCatalogProductBySku,
   resolveProductWarranty,
@@ -10,9 +11,14 @@ import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
 export function shopifyOrderIdVariants(raw: string) {
   const trimmed = raw.trim();
   const withoutClaim = trimmed.replace(/-[WRwr]$/, "");
-  const bare = withoutClaim.replace(/^#/, "");
-  const hashed = bare ? `#${bare}` : "";
-  return [...new Set([trimmed, withoutClaim, bare, hashed].filter(Boolean))];
+  const digits = withoutClaim.replace(/#?CK/gi, "").replace(/\D/g, "");
+  const bareCk = digits ? `CK${digits}` : withoutClaim.replace(/^#/, "");
+  const hashedCk = digits ? `#CK${digits}` : bareCk ? `#${bareCk}` : "";
+  return [
+    ...new Set(
+      [trimmed, withoutClaim, bareCk, hashedCk, digits].filter(Boolean),
+    ),
+  ];
 }
 
 function earliestDate(dates: Array<Date | string | null | undefined>) {
@@ -319,79 +325,91 @@ async function classifyShopifyOrder(shopifyOrderId: string) {
   return lookupShopifyOrderClassification(shopifyOrderId);
 }
 
+type ItemRow = {
+  shopify_order_id: string;
+  order_date: Date;
+  product_id: bigint | number;
+  variant_id: bigint | number;
+  sku: string | null;
+  qty: number;
+  customer_name: string;
+  phone_number: string | null;
+  email: string | null;
+  customer_address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  order_ean: string | number | null;
+  v_warranty: number | null;
+  p_warranty: number | null;
+};
+
+async function loadShopifyOrderItems(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+  const a = unique[0]!;
+  const b = unique[1] ?? a;
+  const c = unique[2] ?? a;
+  const d = unique[3] ?? a;
+  const e = unique[4] ?? a;
+  return prisma.$queryRaw<ItemRow[]>`
+    SELECT so.shopify_order_id, so.order_date, so.product_id, so.variant_id, so.sku, so.qty,
+           so.customer_name, so.phone_number, so.email, so.customer_address, so.city, so.state, so.pincode,
+           so.ean AS order_ean,
+           (
+             SELECT asm_v.warranty_given
+             FROM amazon_sku_mapping asm_v
+             WHERE so.variant_id IS NOT NULL
+               AND so.variant_id != 0
+               AND asm_v.variant_id = CAST(so.variant_id AS CHAR)
+             LIMIT 1
+           ) AS v_warranty,
+           (
+             SELECT asm_p.warranty_given
+             FROM amazon_sku_mapping asm_p
+             WHERE so.product_id IS NOT NULL
+               AND so.product_id != 0
+               AND asm_p.product_id = CAST(so.product_id AS CHAR)
+               AND (
+                 asm_p.variant_id IS NULL
+                 OR asm_p.variant_id = '0'
+                 OR asm_p.variant_id = ''
+               )
+             LIMIT 1
+           ) AS p_warranty
+    FROM shopify_orders so
+    WHERE so.shopify_order_id IN (${a}, ${b}, ${c}, ${d}, ${e})
+  `;
+}
+
 async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResult> {
   try {
     const shopifyOrderId = shopifyOrderIdRaw.trim();
-    const bareId = shopifyOrderId.replace(/^#/, "");
-    const hashedId = `#${bareId}`;
+    const lookupIds = shopifyOrderIdVariants(shopifyOrderId);
+    const hashedId =
+      lookupIds.find((id) => id.startsWith("#CK")) ||
+      lookupIds.find((id) => id.startsWith("#")) ||
+      shopifyOrderId;
 
-    const countRows = await prisma.$queryRaw<Array<{ c: bigint }>>`
-      SELECT COUNT(*) AS c FROM shopify_orders
-      WHERE shopify_order_id = ${shopifyOrderId}
-         OR shopify_order_id = ${bareId}
-         OR shopify_order_id = ${hashedId}
-    `;
-    if (Number(countRows[0]?.c ?? 0) === 0) {
-      return {
-        success: false,
-        error: "Order not found. Please check your order number and try again.",
-      };
+    let orderItems = await loadShopifyOrderItems(lookupIds);
+    if (orderItems.length === 0) {
+      // Nightly BaseLinker cron only pulls yesterday and skips orders
+      // that are not in BaseLinker yet (common for COD / same-day).
+      try {
+        const imported = await importShopifyOrderDirect(shopifyOrderId);
+        if (imported.shopify_order_id) {
+          lookupIds.push(imported.shopify_order_id);
+        }
+      } catch (error) {
+        console.error("verifyShopifyOrder live import:", error);
+      }
+      orderItems = await loadShopifyOrderItems([...new Set(lookupIds)]);
     }
-
-    type ItemRow = {
-      shopify_order_id: string;
-      order_date: Date;
-      product_id: bigint | number;
-      variant_id: bigint | number;
-      sku: string | null;
-      qty: number;
-      customer_name: string;
-      phone_number: string | null;
-      email: string | null;
-      customer_address: string;
-      city: string;
-      state: string;
-      pincode: string;
-      order_ean: string | number | null;
-      v_warranty: number | null;
-      p_warranty: number | null;
-    };
-
-    const orderItems = await prisma.$queryRaw<ItemRow[]>`
-      SELECT so.shopify_order_id, so.order_date, so.product_id, so.variant_id, so.sku, so.qty,
-             so.customer_name, so.phone_number, so.email, so.customer_address, so.city, so.state, so.pincode,
-             so.ean AS order_ean,
-             (
-               SELECT asm_v.warranty_given
-               FROM amazon_sku_mapping asm_v
-               WHERE so.variant_id IS NOT NULL
-                 AND so.variant_id != 0
-                 AND asm_v.variant_id = CAST(so.variant_id AS CHAR)
-               LIMIT 1
-             ) AS v_warranty,
-             (
-               SELECT asm_p.warranty_given
-               FROM amazon_sku_mapping asm_p
-               WHERE so.product_id IS NOT NULL
-                 AND so.product_id != 0
-                 AND asm_p.product_id = CAST(so.product_id AS CHAR)
-                 AND (
-                   asm_p.variant_id IS NULL
-                   OR asm_p.variant_id = '0'
-                   OR asm_p.variant_id = ''
-                 )
-               LIMIT 1
-             ) AS p_warranty
-      FROM shopify_orders so
-      WHERE so.shopify_order_id = ${shopifyOrderId}
-         OR so.shopify_order_id = ${bareId}
-         OR so.shopify_order_id = ${hashedId}
-    `;
 
     if (orderItems.length === 0) {
       return {
         success: false,
-        error: "Order details not found. Please check your order number.",
+        error: "Order not found. Please check your order number and try again.",
       };
     }
 
