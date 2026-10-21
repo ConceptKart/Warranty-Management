@@ -101,6 +101,15 @@ export function TicketActions({
       }
       setChangeTypeOpen(false);
       setSelectedTypeId(null);
+      const nextNumber =
+        typeof data.new_ticket_number === "string"
+          ? data.new_ticket_number
+          : "";
+      if (nextNumber && nextNumber !== ticketNumber) {
+        router.replace(`/admin/tickets/${encodeURIComponent(nextNumber)}`);
+        router.refresh();
+        return;
+      }
       router.refresh();
     } finally {
       setChangingType(false);
@@ -516,7 +525,8 @@ export function TicketActions({
           </p>
           <div className="alert alert-warning py-2 mb-3 small">
             Changing the type resets status to the new type&apos;s initial
-            status and updates the claim suffix (W↔R).
+            status and updates the ticket prefix (WR↔RP) and claim suffix
+            (W↔R).
           </div>
           <div className="mb-3">
             <label className="form-label fw-semibold">Change to:</label>

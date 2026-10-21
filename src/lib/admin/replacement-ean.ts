@@ -6,6 +6,11 @@ import { prisma } from "@/lib/db";
 import { getInventoryProductByEan } from "@/lib/baselinker/inventory";
 import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
 import { compactSku } from "@/lib/portal/sku-normalize";
+import {
+  generateTicketNumber,
+  swapOrderTypeSuffix,
+  swapTicketNumberPrefix,
+} from "@/lib/tickets/ticket-number";
 
 export type ReplacementProductInfo = {
   success: boolean;
@@ -333,6 +338,7 @@ export async function changeTicketType(
   error?: string;
   new_type_name?: string;
   new_claim_number?: string | null;
+  new_ticket_number?: string;
 }> {
   if (!ticketId || !newTypeId) {
     return { success: false, error: "ticket_id and new_type_id are required" };
@@ -345,10 +351,13 @@ export async function changeTicketType(
           ticket_type_id: number;
           status_id: number;
           claim_number: string | null;
+          ticket_number: string;
+          order_id: number;
           current_type_code: string;
         }>
       >`
         SELECT wt.ticket_type_id, wt.status_id, wt.claim_number,
+               wt.ticket_number, wt.order_id,
                tt.type_code AS current_type_code
         FROM warranty_tickets wt
         JOIN ticket_types tt ON tt.ticket_type_id = wt.ticket_type_id
@@ -391,13 +400,23 @@ export async function changeTicketType(
         };
       }
 
-      let newClaimNumber = ticket.claim_number;
-      if (newClaimNumber) {
-        const lastChar = newClaimNumber.slice(-1).toUpperCase();
-        if (lastChar === "W" && newType.type_code === "replacement") {
-          newClaimNumber = `${newClaimNumber.slice(0, -1)}R`;
-        } else if (lastChar === "R" && newType.type_code === "warranty") {
-          newClaimNumber = `${newClaimNumber.slice(0, -1)}W`;
+      const newClaimNumber = swapOrderTypeSuffix(
+        ticket.claim_number,
+        newType.type_code,
+      );
+
+      let newTicketNumber = swapTicketNumberPrefix(
+        ticket.ticket_number,
+        newType.type_code,
+      );
+      if (newTicketNumber !== ticket.ticket_number) {
+        const clash = await tx.$queryRaw<Array<{ ticket_number: string }>>`
+          SELECT ticket_number FROM warranty_tickets
+          WHERE ticket_number = ${newTicketNumber}
+          LIMIT 1
+        `;
+        if (clash[0]) {
+          newTicketNumber = await generateTicketNumber(newTypeId);
         }
       }
 
@@ -406,9 +425,35 @@ export async function changeTicketType(
         SET ticket_type_id = ${newTypeId},
             status_id = ${newStatusId},
             claim_number = ${newClaimNumber},
+            ticket_number = ${newTicketNumber},
             updated_at = NOW()
         WHERE ticket_id = ${ticketId}
       `;
+
+      const orderRows = await tx.$queryRaw<
+        Array<{ order_number: string | null; ticket_number: string | null }>
+      >`
+        SELECT order_number, ticket_number FROM orders
+        WHERE order_id = ${ticket.order_id}
+        LIMIT 1
+      `;
+      const order = orderRows[0];
+      if (order) {
+        const newOrderNumber = swapOrderTypeSuffix(
+          order.order_number,
+          newType.type_code,
+        );
+        const orderTicketNumber =
+          order.ticket_number === ticket.ticket_number
+            ? newTicketNumber
+            : order.ticket_number;
+        await tx.$executeRaw`
+          UPDATE orders
+          SET order_number = ${newOrderNumber},
+              ticket_number = ${orderTicketNumber}
+          WHERE order_id = ${ticket.order_id}
+        `;
+      }
 
       const note = `Ticket type changed from ${capitalize(ticket.current_type_code)} to ${capitalize(newType.type_code)}`;
       await tx.$executeRaw`
@@ -429,6 +474,7 @@ export async function changeTicketType(
         success: true,
         new_type_name: newType.type_name,
         new_claim_number: newClaimNumber,
+        new_ticket_number: newTicketNumber,
       };
     });
   } catch (e) {

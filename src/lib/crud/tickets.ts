@@ -6,6 +6,7 @@ import {
   serializeRows,
   sqlNullableString,
 } from "@/lib/crud/http";
+import { generateTicketNumber } from "@/lib/tickets/ticket-number";
 
 const TICKET_COLS = `
   wt.ticket_id, wt.ticket_number, wt.order_id, wt.claim_number, wt.product_id,
@@ -26,30 +27,6 @@ const TICKET_FROM = `
   LEFT JOIN orders o ON o.order_id = wt.order_id
   LEFT JOIN customers c ON c.customer_id = o.customer_id
 `;
-
-async function generateTicketNumber(ticketTypeId: number): Promise<string> {
-  let prefix = "WR";
-  const typeRows = await prisma.$queryRaw<Array<{ type_code: string | null }>>`
-    SELECT type_code FROM ticket_types WHERE ticket_type_id = ${ticketTypeId}
-  `;
-  const typeCode = typeRows[0]?.type_code ?? "";
-  if (typeCode === "replacement") prefix = "RP";
-  else if (typeCode === "warranty") prefix = "WR";
-  else if (typeCode) prefix = "TK";
-
-  const now = new Date();
-  const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const like = `${prefix}${yearMonth}%`;
-  const offset = prefix.length + yearMonth.length + 1;
-
-  const rows = await prisma.$queryRaw<Array<{ max_seq: bigint | number | null }>>`
-    SELECT COALESCE(MAX(CAST(SUBSTRING(ticket_number, ${offset}) AS UNSIGNED)), 0) AS max_seq
-    FROM warranty_tickets
-    WHERE ticket_number LIKE ${like}
-  `;
-  const next = Number(rows[0]?.max_seq ?? 0) + 1;
-  return `${prefix}${yearMonth}${String(next).padStart(4, "0")}`;
-}
 
 function ticketStatusFilter(url?: URL | null) {
   const statusId = Number(url?.searchParams.get("status_id") ?? "");

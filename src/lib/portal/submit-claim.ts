@@ -6,6 +6,10 @@ import type { PortalOrderData, PortalSessionData } from "@/lib/portal/session";
 import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
 import { compactSku } from "@/lib/portal/sku-normalize";
 import { uploadToRemoteServer } from "@/lib/portal/upload-to-remote";
+import {
+  generateTicketNumber,
+  indianMobileDigits,
+} from "@/lib/tickets/ticket-number";
 
 export type ClaimInput = {
   customerEmail: string;
@@ -129,8 +133,8 @@ export function validateClaimInput(
     errors.push("Name must contain only alphabets");
   }
 
-  const phoneValue = data.customerPhone.trim();
-  if (phoneValue && !/^\d{10}$/.test(phoneValue)) {
+  const phoneValue = indianMobileDigits(data.customerPhone);
+  if (data.customerPhone.trim() && phoneValue.length !== 10) {
     errors.push("Phone number must be exactly 10 digits");
   }
 
@@ -358,29 +362,6 @@ async function resolveTicketTypeAndStatus(
   return { ticketTypeId, statusId };
 }
 
-async function generateTicketNumber(ticketTypeId: number): Promise<string> {
-  let prefix = "WR";
-  const typeRows = await prisma.$queryRaw<Array<{ type_code: string | null }>>`
-    SELECT type_code FROM ticket_types WHERE ticket_type_id = ${ticketTypeId}
-  `;
-  const typeCode = typeRows[0]?.type_code ?? "";
-  if (typeCode === "replacement") prefix = "RP";
-  else if (typeCode === "warranty") prefix = "WR";
-  else if (typeCode) prefix = "TK";
-
-  const now = new Date();
-  const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const like = `${prefix}${yearMonth}%`;
-  const offset = prefix.length + yearMonth.length + 1;
-
-  const rows = await prisma.$queryRaw<Array<{ max_seq: bigint | number | null }>>`
-    SELECT COALESCE(MAX(CAST(SUBSTRING(ticket_number, ${offset}) AS UNSIGNED)), 0) AS max_seq
-    FROM warranty_tickets
-    WHERE ticket_number LIKE ${like}
-  `;
-  const next = Number(rows[0]?.max_seq ?? 0) + 1;
-  return `${prefix}${yearMonth}${String(next).padStart(4, "0")}`;
-}
 
 type SeqResult =
   | {
@@ -655,8 +636,9 @@ export async function submitPortalClaim(
   const customerEmail = input.customerEmail.trim();
   const customerName =
     input.customerName.trim() || orderData.customer.name || "";
-  const customerPhone =
-    input.customerPhone.trim() || orderData.customer.phone || "";
+  const customerPhone = indianMobileDigits(
+    input.customerPhone.trim() || orderData.customer.phone || "",
+  );
   const shippingAddress =
     input.shippingAddress.trim() ||
     formatShippingLine(orderData.customer.shipping_address);
@@ -801,18 +783,22 @@ export async function submitPortalClaim(
       )
     `;
 
-    const ticketRows = await prisma.$queryRaw<Array<{ ticket_id: number }>>`
-      SELECT ticket_id FROM warranty_tickets
-      WHERE ticket_number = ${ticketNumber}
+    const ticketRows = await prisma.$queryRaw<
+      Array<{ ticket_id: number; ticket_number: string }>
+    >`
+      SELECT ticket_id, ticket_number FROM warranty_tickets
+      WHERE order_id = ${orderId}
+      ORDER BY ticket_id DESC
       LIMIT 1
     `;
     const ticketDbId = ticketRows[0]?.ticket_id;
+    const savedTicketNumber = ticketRows[0]?.ticket_number || ticketNumber;
     if (!ticketDbId) {
       return { success: false, error: "Failed to create warranty ticket" };
     }
 
     await prisma.$executeRaw`
-      UPDATE orders SET ticket_number = ${ticketNumber} WHERE order_id = ${orderId}
+      UPDATE orders SET ticket_number = ${savedTicketNumber} WHERE order_id = ${orderId}
     `;
 
     for (const file of upload.files) {
@@ -850,7 +836,7 @@ export async function submitPortalClaim(
 
     return {
       success: true,
-      ticket_number: ticketNumber,
+      ticket_number: savedTicketNumber,
       ticket_id: ticketDbId,
     };
   } catch (error) {

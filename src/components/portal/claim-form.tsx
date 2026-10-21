@@ -52,6 +52,14 @@ function onlyDigits(value: string, maxLen: number) {
   return value.replace(/\D/g, "").slice(0, maxLen);
 }
 
+function indianMobile(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length >= 11 && digits.startsWith("91")) return digits.slice(-10);
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(-10);
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
+
 export function ClaimForm({
   platform,
   orderId,
@@ -79,7 +87,7 @@ export function ClaimForm({
   const [editing, setEditing] = useState(isAmazon);
   const [name, setName] = useState(() => onlyAlphabets(customer.name));
   const [email, setEmail] = useState(customer.email);
-  const [phone, setPhone] = useState(() => onlyDigits(customer.phone, 10));
+  const [phone, setPhone] = useState(() => indianMobile(customer.phone));
   const [street, setStreet] = useState(customer.shipping_address.address);
   const [city, setCity] = useState(() =>
     onlyAlphabets(customer.shipping_address.city),
@@ -522,7 +530,7 @@ export function ClaimForm({
                 id="edit-phone"
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(onlyDigits(e.target.value, 10))}
+                onChange={(e) => setPhone(indianMobile(e.target.value))}
                 placeholder="+1234567890"
                 inputMode="numeric"
                 maxLength={10}
@@ -642,7 +650,7 @@ export function ClaimForm({
                 onClick={() => {
                   setName(onlyAlphabets(customer.name));
                   setEmail(customer.email);
-                  setPhone(onlyDigits(customer.phone, 10));
+                  setPhone(indianMobile(customer.phone));
                   setStreet(customer.shipping_address.address);
                   setCity(onlyAlphabets(customer.shipping_address.city));
                   setState(onlyAlphabets(customer.shipping_address.state));
