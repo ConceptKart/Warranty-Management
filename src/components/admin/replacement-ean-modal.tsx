@@ -25,9 +25,11 @@ type Warehouse = {
 };
 
 const WAREHOUSE_NAMES: Record<string, string> = {
-  "9000461": "Main Warehouse",
-  "9001939": "Secondary Warehouse",
+  "9000461": "SVPL",
+  "9002929": "CKPL",
 };
+const ALLOWED_WAREHOUSE_IDS = new Set([9000461, 9002929]);
+const PREFERRED_WAREHOUSE_ID = 9002929;
 
 function formatWarehouse(id: number) {
   return WAREHOUSE_NAMES[String(id)] || `Warehouse ${id}`;
@@ -153,11 +155,23 @@ export function ReplacementEanModal({
         }),
       });
       const data = await res.json();
-      const warehouses = (data.warehouses ?? []) as Warehouse[];
+      const warehouses = ((data.warehouses ?? []) as Warehouse[])
+        .filter((wh) => ALLOWED_WAREHOUSE_IDS.has(Number(wh.warehouse_id)))
+        .map((wh) => {
+          const locations = [...(wh.locations ?? [])].filter(Boolean);
+          if (wh.stock > 0 && locations.length === 0) {
+            const fallback =
+              wh.warehouse_id === 9002929 ? "F6-BR2C3" : "F1-AC1R1";
+            locations.push(fallback);
+          }
+          return { ...wh, locations };
+        });
+      const errorText =
+        typeof data.error === "string" && data.error.trim()
+          ? data.error.trim()
+          : "No stock available in SVPL or CKPL for this product.";
       if (!data.success || warehouses.length === 0) {
-        setStockError(
-          data.error || "No stock information available for this product.",
-        );
+        setStockError(errorText);
         return;
       }
 
@@ -175,15 +189,21 @@ export function ReplacementEanModal({
       const sorted = [...warehouses].sort((a, b) => {
         const stockDiff = Math.abs(a.stock - b.stock);
         const isSimilar = stockDiff < Math.max(a.stock, b.stock) * 0.1;
-        if (isSimilar && a.warehouse_id === 9001939) return -1;
-        if (isSimilar && b.warehouse_id === 9001939) return 1;
+        if (isSimilar && a.warehouse_id === PREFERRED_WAREHOUSE_ID) return -1;
+        if (isSimilar && b.warehouse_id === PREFERRED_WAREHOUSE_ID) return 1;
         return b.stock - a.stock;
       });
       const selected = sorted[0];
       const loc =
         selected.locations[
           Math.floor(Math.random() * selected.locations.length)
-        ];
+        ] || "";
+      if (!loc) {
+        setStockError(
+          "No stock with valid locations available for this product.",
+        );
+        return;
+      }
       setWarehouseId(selected.warehouse_id);
       setLocationName(loc);
       setStockInfo(

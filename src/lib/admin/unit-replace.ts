@@ -34,11 +34,22 @@ export async function getUnitReplaceStock(
       productId,
       variantId && variantId !== 0 ? variantId : null,
     );
+    const warehouses = formatWarehousesForApi(stockInfo);
+    if (warehouses.length === 0) {
+      return {
+        success: false,
+        error:
+          "No stock available in SVPL (9000461) or CKPL (9002929) for this product.",
+        product_id: productId,
+        variant_id: variantId,
+        warehouses: [],
+      };
+    }
     return {
       success: true,
       product_id: productId,
       variant_id: variantId,
-      warehouses: formatWarehousesForApi(stockInfo),
+      warehouses,
     };
   } catch (e) {
     return {

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { getReplacementProductInfo } from "@/lib/admin/replacement-ean";
+import {
+  extractWarehouseStockLocations,
+  formatWarehousesForApi,
+} from "@/lib/baselinker/inventory";
 import { resetDb, setQueryRaw } from "@/lib/db";
 
 const CLAIMED_SKU = "AC-Note-Plus-DAC-Gry";
@@ -77,4 +81,46 @@ test("claimed SKU is kept even when catalog lookup is empty", async () => {
   assert.equal(result.original_product?.product_sku, CLAIMED_SKU);
   assert.equal(result.original_product?.product_name, CLAIMED_SKU);
   assert.notEqual(result.original_product?.product_name, WRONG_JOIN_PRODUCT);
+});
+
+test("stock lookup reads warehouse ids without the bl_ prefix and fills PHP default bins", () => {
+  const extracted = extractWarehouseStockLocations({
+    stock: { 9000461: 3, 9002929: 1 },
+    locations: {},
+  });
+  const rows = formatWarehousesForApi(extracted);
+  assert.equal(rows.find((row) => row.warehouse_id === 9000461)?.stock, 3);
+  assert.equal(
+    rows.find((row) => row.warehouse_id === 9000461)?.locations[0],
+    "F1-AC1R1",
+  );
+  assert.equal(
+    rows.find((row) => row.warehouse_id === 9002929)?.locations[0],
+    "F6-BR2C3",
+  );
+});
+
+test("stock lookup only uses SVPL 9000461 and CKPL 9002929", () => {
+  const rows = formatWarehousesForApi({
+    bl_9000461: {
+      stock: 2,
+      locations: ["F1-AC1R1"],
+      warehouse_id: 9000461,
+    },
+    bl_9001939: {
+      stock: 9,
+      locations: ["OLD"],
+      warehouse_id: 9001939,
+    },
+    bl_9002929: {
+      stock: 4,
+      locations: ["F6-BR2C3"],
+      warehouse_id: 9002929,
+    },
+  });
+  assert.deepEqual(
+    rows.map((row) => row.warehouse_id).sort(),
+    [9000461, 9002929],
+  );
+  assert.ok(!rows.some((row) => row.warehouse_id === 9001939));
 });

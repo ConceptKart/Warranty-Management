@@ -9,7 +9,63 @@ const DEFAULT_INVENTORY_ID = Number(
   process.env.BASELINKER_INVENTORY_ID?.trim() || "392",
 );
 
-const WAREHOUSE_KEYS = ["bl_9000461", "bl_9001939"] as const;
+/** PHP ticket-details / warranty_unit_replace: SVPL + CKPL only. */
+export const SVPL_WAREHOUSE_ID = 9000461;
+export const CKPL_WAREHOUSE_ID = 9002929;
+const SELLING_WAREHOUSE_IDS = [
+  SVPL_WAREHOUSE_ID,
+  CKPL_WAREHOUSE_ID,
+] as const;
+const WAREHOUSE_KEYS = [
+  `bl_${SVPL_WAREHOUSE_ID}`,
+  `bl_${CKPL_WAREHOUSE_ID}`,
+] as const;
+
+/** PHP ticket-details.php when BaseLinker returns stock but no bin. */
+export const DEFAULT_WAREHOUSE_LOCATIONS: Record<number, string> = {
+  [SVPL_WAREHOUSE_ID]: "F1-AC1R1",
+  [CKPL_WAREHOUSE_ID]: "F6-BR2C3",
+};
+
+function warehouseKeyAliases(warehouseId: number) {
+  return [`bl_${warehouseId}`, String(warehouseId), warehouseId];
+}
+
+function readWarehouseValue(
+  data: Record<string, unknown> | unknown,
+  warehouseId: number,
+): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+  const record = data as Record<string, unknown>;
+  for (const key of warehouseKeyAliases(warehouseId)) {
+    if (record[key as string] != null && record[key as string] !== "") {
+      return record[key as string];
+    }
+  }
+  return undefined;
+}
+
+function parseLocations(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    return raw
+      .split(";")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function productFromMap(map: ProductMap, id: number | string) {
+  return (
+    map[String(id)] ??
+    map[id as string] ??
+    Object.entries(map).find(([key]) => String(key) === String(id))?.[1] ??
+    null
+  );
+}
 
 export type BaselinkerProductMatch = {
   product_id: number | string;
@@ -34,7 +90,8 @@ function sumStock(stock: unknown): number {
   if (Array.isArray(stock) || (stock && typeof stock === "object")) {
     const s = stock as Record<string, unknown>;
     return (
-      Number(s.bl_9000461 ?? 0) + Number(s.bl_9001939 ?? 0)
+      Number(readWarehouseValue(s, SVPL_WAREHOUSE_ID) ?? 0) +
+      Number(readWarehouseValue(s, CKPL_WAREHOUSE_ID) ?? 0)
     );
   }
   return Number(stock ?? 0);
@@ -176,29 +233,27 @@ export async function getInventoryProductByEan(
   return null;
 }
 
-function extractWarehouseStockLocations(
+export function extractWarehouseStockLocations(
   data: Record<string, unknown>,
 ): Record<string, { stock: number; locations: string[]; warehouse_id: number }> {
-  const stockData = (data.stock as Record<string, unknown>) ?? {};
-  const locationData = (data.locations as Record<string, unknown>) ?? {};
+  const stockData = data.stock;
+  const locationData = data.locations;
   const result: Record<
     string,
     { stock: number; locations: string[]; warehouse_id: number }
   > = {};
 
-  for (const wh of WAREHOUSE_KEYS) {
-    const qty = Number(stockData[wh] ?? 0);
-    const location = String(locationData[wh] ?? "");
-    const locations = location
-      ? location
-          .split(";")
-          .map((l) => l.trim())
-          .filter(Boolean)
-      : [];
-    result[wh] = {
+  for (const warehouseId of SELLING_WAREHOUSE_IDS) {
+    const qty = Number(readWarehouseValue(stockData, warehouseId) ?? 0);
+    let locations = parseLocations(readWarehouseValue(locationData, warehouseId));
+    if (qty > 0 && locations.length === 0) {
+      const fallback = DEFAULT_WAREHOUSE_LOCATIONS[warehouseId];
+      if (fallback) locations = [fallback];
+    }
+    result[`bl_${warehouseId}`] = {
       stock: qty,
       locations,
-      warehouse_id: Number(wh.replace("bl_", "")),
+      warehouse_id: warehouseId,
     };
   }
   return result;
@@ -211,19 +266,23 @@ export async function getProductStockAndLocations(
 ): Promise<Record<string, { stock: number; locations: string[]; warehouse_id: number }>> {
   if (variantId && variantId !== 0) {
     const byVariant = await getInventoryProductsData(inventoryId, [variantId]);
-    if (byVariant[String(variantId)]) {
-      return extractWarehouseStockLocations(byVariant[String(variantId)]);
+    const variantData = productFromMap(byVariant, variantId);
+    if (variantData) {
+      return extractWarehouseStockLocations(variantData);
     }
 
     if (productId) {
       const byProduct = await getInventoryProductsData(inventoryId, [
         productId,
       ]);
-      const productData = byProduct[String(productId)];
+      const productData = productFromMap(byProduct, productId);
       if (productData) {
         const variants = productData.variants as ProductMap | undefined;
-        if (variants?.[String(variantId)]) {
-          return extractWarehouseStockLocations(variants[String(variantId)]);
+        const nested =
+          variants?.[String(variantId)] ??
+          productFromMap((variants ?? {}) as ProductMap, variantId);
+        if (nested) {
+          return extractWarehouseStockLocations(nested);
         }
       }
     }
@@ -232,7 +291,7 @@ export async function getProductStockAndLocations(
 
   if (!productId) return {};
   const byProduct = await getInventoryProductsData(inventoryId, [productId]);
-  const productData = byProduct[String(productId)];
+  const productData = productFromMap(byProduct, productId);
   if (!productData) return {};
   return extractWarehouseStockLocations(productData);
 }
