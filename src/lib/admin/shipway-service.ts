@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { indianMobileDigits } from "@/lib/tickets/ticket-number";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 export type ShipwayCreateResult =
   | {
@@ -586,7 +587,7 @@ export async function createForwardShipment(
     box_length: String(input.box_length ?? 10),
     box_breadth: String(input.box_breadth ?? 5),
     box_height: String(input.box_height ?? 4),
-    order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
+    order_date: nowIstSql(),
   };
 
   const orderIds = forwardOrderIdCandidates(input);

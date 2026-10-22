@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { formatUtcToIstReturnAwb } from "@/lib/datetime/ist";
 
 export const RETURN_AWB_PER_PAGE = [10, 25, 50, 100] as const;
 
@@ -62,54 +63,7 @@ export function resolveReturnAwbPaging(
 export function formatReturnAwbIst(
   value: Date | string | null | undefined,
 ): string {
-  if (value == null || value === "") return "—";
-
-  let utc: Date | null = null;
-  if (typeof value === "string") {
-    const text = value.trim().replace("T", " ");
-    const match = text.match(
-      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/,
-    );
-    if (match) {
-      utc = new Date(
-        Date.UTC(
-          Number(match[1]),
-          Number(match[2]) - 1,
-          Number(match[3]),
-          Number(match[4]),
-          Number(match[5]),
-          Number(match[6] ?? 0),
-        ),
-      );
-    } else {
-      const parsed = new Date(text);
-      utc = Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-  } else {
-    utc = Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  if (!utc) return "—";
-
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(utc);
-
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  const day = get("day");
-  const month = get("month");
-  const year = get("year");
-  const hour = get("hour");
-  const minute = get("minute");
-  if (!day || !month || !year) return "—";
-  return `${day} ${month} ${year} ${hour}:${minute}`;
+  return formatUtcToIstReturnAwb(value);
 }
 
 export function returnAwbConditionClass(condition: string | null | undefined) {

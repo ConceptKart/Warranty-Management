@@ -1,5 +1,6 @@
 import { queryExternalShipway } from "@/lib/db-external-shipway";
 import { fetchShipwayLiveAwbStatus } from "@/lib/admin/shipway-tracker";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 export type AwbStatusResult = {
   display_status: string;
@@ -342,5 +343,5 @@ export async function lookupAwbStatusesFromExternal(
 }
 
 function nowSqlFallback() {
-  return new Date().toISOString().slice(0, 19).replace("T", " ");
+  return nowIstSql();
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminUserRow } from "@/lib/admin/users";
+import { formatIstDate, formatIstDateTime } from "@/lib/datetime/ist";
 
 const ROLE_OPTIONS = [
   { value: "support", label: "Support Agent" },
@@ -22,26 +23,12 @@ const roleColors: Record<string, string> = {
 
 function formatLastLogin(value: Date | string | null) {
   if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const label = formatIstDateTime(value, "");
+  return label || null;
 }
 
 function formatCreated(value: Date | string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatIstDate(value, "—");
 }
 
 export function UsersManager({

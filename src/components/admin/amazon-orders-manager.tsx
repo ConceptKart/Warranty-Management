@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { formatIstDateTime, nowIstSql, todayIstDate } from "@/lib/datetime/ist";
 
 type AmazonRow = {
   id: number;
@@ -14,23 +15,15 @@ type AmazonRow = {
 type View = "idle" | "results" | "not_found" | "insert";
 
 function formatIst(value: string | Date | null | undefined) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return formatIstDateTime(value, "—");
 }
 
 function defaultDatetimeLocal() {
-  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().slice(0, 16);
+  return nowIstSql().replace(" ", "T").slice(0, 16);
 }
 
 function todayIstYmd() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return todayIstDate();
 }
 
 function truncate(text: string | null | undefined, max = 40) {

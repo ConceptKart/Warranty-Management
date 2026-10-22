@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { lookupAwbStatusesFromExternal } from "@/lib/admin/external-shipment-sync";
 import { getShipmentTracking, updateShipmentStatus } from "@/lib/admin/shipments";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 export type StatusCount = {
   shipment_status: string;
@@ -321,7 +322,7 @@ export async function getShipmentHistory(awbNumber: string) {
       shipment_info: local.shipment,
       tracking_history: local.history,
       api_data: apiResponse.success ? apiResponse.data : null,
-      last_updated: new Date().toISOString().slice(0, 19).replace("T", " "),
+      last_updated: nowIstSql(),
     },
   };
 }

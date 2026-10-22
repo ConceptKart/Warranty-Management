@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { ReadyTicket, TrackingEvent } from "@/lib/admin/shipments";
+import { formatIstDate, formatIstDateTime } from "@/lib/datetime/ist";
 
 type ShipmentRow = {
   shipment_id: number;
@@ -48,19 +49,10 @@ function priorityBadge(priority: string | null) {
 
 function formatCreated(value: Date | string | null) {
   if (!value) return { date: "—", time: "" };
-  const d = new Date(value);
-  return {
-    date: d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
-    time: d.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }),
-  };
+  const date = formatIstDate(value, "—");
+  const full = formatIstDateTime(value, "");
+  const timeMatch = full.match(/(\d{2}:\d{2})/);
+  return { date, time: timeMatch?.[1] ?? "" };
 }
 
 function labelStatus(status: string | null) {
@@ -658,7 +650,7 @@ function TrackingView({
                     <strong>Est. Delivery:</strong>
                   </td>
                   <td>
-                    {new Date(shipment.estimated_delivery).toLocaleString()}
+                    {formatIstDateTime(shipment.estimated_delivery)}
                   </td>
                 </tr>
               ) : null}
@@ -669,7 +661,7 @@ function TrackingView({
                   </td>
                   <td className="text-success">
                     <i className="fas fa-check-circle me-1" />
-                    {new Date(shipment.actual_delivery).toLocaleString()}
+                    {formatIstDateTime(shipment.actual_delivery)}
                   </td>
                 </tr>
               ) : null}

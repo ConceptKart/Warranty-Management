@@ -6,6 +6,7 @@ import {
   serializeRows,
   sqlNullableString,
 } from "@/lib/crud/http";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 const ORDER_SELECT = `
   o.order_id, o.baselinker_order_id, o.order_number, o.customer_id,
@@ -59,7 +60,7 @@ export async function createOrder(body: Record<string, unknown>) {
 
   const orderDate =
     sqlNullableString(body.order_date) ??
-    new Date().toISOString().slice(0, 19).replace("T", " ");
+    nowIstSql();
 
   await prisma.$executeRaw`
     INSERT INTO orders (

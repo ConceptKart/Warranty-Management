@@ -5,6 +5,7 @@ import {
   getEnhancedDashboardStats,
   getRecentTickets,
 } from "@/lib/admin/dashboard";
+import { formatIstDate } from "@/lib/datetime/ist";
 
 const priorityColors: Record<string, string> = {
   urgent: "#dc3545",
@@ -25,12 +26,7 @@ function formatNumber(value: number) {
 }
 
 function formatDate(value: Date | null) {
-  if (!value) return "—";
-  return value.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatIstDate(value, "—");
 }
 
 export default async function AdminDashboardPage() {

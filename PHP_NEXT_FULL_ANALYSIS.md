@@ -379,7 +379,7 @@ Same database, two writers:
 - Ticket numbers: PHP first-gap vs Next MAX+1; PHP `date('Ym')` vs IST.
 - Change Type: PHP leaves `WR` on Replacement; Next renames on new clicks only. ~1812 old replacement tickets can still be `WR…`.
 - Forward: PHP blank carrier + empty AWB = success; Next blank carrier + empty AWB = fail + `{ticket}P` retry.
-- `DATETIME` stored without timezone: IST vs UTC display can shift 5:30.
+- `DATETIME` stored without timezone: Next now prints IST wall-clock (1.8 done). PHP+Next dual write can still mix clocks until PHP stops.
 - Two crons / two webhooks double-update shipments.
 
 **Rule:** after Next is the panel of record, stop PHP portal + tickets + ticket-details + cron + webhook.
@@ -436,7 +436,7 @@ Both stacks: validator leftover, no real verify. Port only if you start taking F
 4. **Assign AWB address parse** (stops Amazon pickup/forward form failures).
 5. **BaseLinker clone** — done (Website / Shopify).
 6. Status notes + role-gated ticket buttons — done.
-7. IST/`DATETIME` audit if times still look wrong.
+7. IST/`DATETIME` audit — done.
 8. Historical `WR`↔`RP` backfill only if you want old tickets renamed.
 
 ---

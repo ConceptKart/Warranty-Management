@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { parseCustomerAddress, assignAwbToTicket } from "@/lib/admin/ticket-details";
 import { createForwardShipment } from "@/lib/admin/shipway-service";
+import { formatIstSql } from "@/lib/datetime/ist";
 import {
   lookupAwbStatusesFromExternal,
   type AwbStatusResult,
@@ -305,12 +306,8 @@ export async function getTodaysForwardAwbOrders(input: {
   return rows.map((row) => ({
     ...row,
     ticket_id: Number(row.ticket_id),
-    awb_created_at: row.awb_created_at
-      ? new Date(row.awb_created_at).toISOString()
-      : null,
-    handed_over_at: row.handed_over_at
-      ? new Date(row.handed_over_at).toISOString()
-      : null,
+    awb_created_at: row.awb_created_at ? formatIstSql(row.awb_created_at) : null,
+    handed_over_at: row.handed_over_at ? formatIstSql(row.handed_over_at) : null,
   }));
 }
 

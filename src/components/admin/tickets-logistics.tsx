@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { formatIstDate, formatIstDateTime, todayIstDate } from "@/lib/datetime/ist";
 
 export type TicketRow = {
   ticket_id: number;
@@ -52,33 +53,18 @@ type BulkResult = {
 
 function formatOrderDate(value: Date | string | null) {
   if (!value) return null;
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  const label = formatIstDate(value, "");
+  return label || null;
 }
 
 function formatRequestDate(value: Date | string | null) {
   if (!value) return null;
-  return (
-    new Date(value).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    }) + " IST"
-  );
+  const label = formatIstDateTime(value, "");
+  return label || null;
 }
 
 function todayIso() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-  }).format(new Date());
+  return todayIstDate();
 }
 
 export function TicketsLogistics({

@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin/external-shipment-sync";
 import { updateTicketWorkflowStatusGuarded } from "@/lib/admin/shipway-status-sync";
 import { sendForStatus } from "@/lib/email/email-service";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 const BATCH_SIZE = Math.min(
   500,
@@ -45,7 +46,7 @@ type SyncResults = {
 };
 
 function nowSql() {
-  return new Date().toISOString().slice(0, 19).replace("T", " ");
+  return nowIstSql();
 }
 
 function emptyResults(mode: string): SyncResults {

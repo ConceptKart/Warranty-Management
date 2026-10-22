@@ -9,35 +9,14 @@ import { ShipmentTrackingCard } from "@/components/admin/shipment-tracking-card"
 import { EmailLogCard } from "@/components/admin/email-log-card";
 import { getSession } from "@/lib/auth/get-session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { formatIstDate, formatIstDateTime } from "@/lib/datetime/ist";
 
 function formatIst(value: Date | string | null | undefined) {
-  if (!value) return "N/A";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return (
-    d.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    }) + " IST"
-  );
+  return formatIstDateTime(value);
 }
 
 function formatDateShort(value: Date | string | null | undefined) {
-  if (!value) return "N/A";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
+  return formatIstDate(value);
 }
 
 function resolveAttachmentUrl(remoteUrl: string | null, filePath: string) {

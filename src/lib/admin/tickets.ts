@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { lookupAwbStatusesByTicketIds } from "@/lib/admin/logistics-ops";
 import { silentSyncTicketsFromAwbLookup } from "@/lib/admin/shipway-status-sync";
+import { addIstDays, formatIstSql, todayIstDate } from "@/lib/datetime/ist";
 
 export type TicketFilters = {
   search?: string;
@@ -119,9 +120,7 @@ export function resolveTicketFilters(
   if (dashFilter === "pending") filterFinalOverride = 0;
   if (dashFilter === "completed") filterFinalOverride = 1;
   if (dashFilter === "recent") {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    filterDateFrom = d.toISOString().slice(0, 10);
+    filterDateFrom = addIstDays(todayIstDate(), -7);
   }
 
   if (dashFilter === "warranty" || dashFilter === "replacement") {
@@ -425,8 +424,8 @@ export function ticketsToCsvRows(tickets: TicketListItem[]): string {
         ticket.ticket_number,
         ticket.priority ? capitalize(ticket.priority) : "",
         ticket.status_name ?? "",
-        ticket.created_at ? new Date(ticket.created_at).toISOString() : "",
-        ticket.updated_at ? new Date(ticket.updated_at).toISOString() : "",
+        ticket.created_at ? formatIstSql(ticket.created_at) : "",
+        ticket.updated_at ? formatIstSql(ticket.updated_at) : "",
         ticket.customer_email ?? "",
         `${ticket.first_name ?? ""} ${ticket.last_name ?? ""}`.trim(),
         ticket.product_name ?? "",

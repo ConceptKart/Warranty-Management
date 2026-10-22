@@ -4,23 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AwbStatusResult } from "@/lib/admin/external-shipment-sync";
 import { AssignAwbButton } from "@/components/admin/assign-awb-button";
+import { formatUtcToIstDateTime } from "@/lib/datetime/ist";
 
 function formatIst(value: string | null | undefined) {
   if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return (
-    d.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    }) + " IST"
-  );
+  const label = formatUtcToIstDateTime(value, "");
+  return label || value;
 }
 
 function badgeClass(status: AwbStatusResult | null) {

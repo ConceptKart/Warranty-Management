@@ -3,6 +3,7 @@ import {
   processShipwayWebhook,
   type ShipwayWebhookPayload,
 } from "@/lib/admin/shipway-webhook";
+import { nowIstSql } from "@/lib/datetime/ist";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       message: "Webhook endpoint is working",
-      timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
+      timestamp: nowIstSql(),
       method: "GET",
     });
   }

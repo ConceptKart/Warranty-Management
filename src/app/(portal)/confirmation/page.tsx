@@ -3,30 +3,10 @@ import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { getPortalSession } from "@/lib/portal/get-session";
 import { getTicketForTracking } from "@/lib/portal/track-ticket";
+import { formatIstPortal } from "@/lib/datetime/ist";
 
 function formatSubmitted(value: Date | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const day = String(d.getDate()).padStart(2, "0");
-  const mon = months[d.getMonth()];
-  const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${mon} ${day}, ${year} ${hh}:${mm}`;
+  return formatIstPortal(value);
 }
 
 export default async function ConfirmationPage() {

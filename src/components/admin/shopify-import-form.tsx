@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { formatIstDateTime } from "@/lib/datetime/ist";
 
 type ShopifyOrderRow = {
   id: number;
@@ -15,14 +16,7 @@ type ShopifyOrderRow = {
 type AlertState = { ok: boolean; text: string } | null;
 
 function formatIst(value: string | Date | null | undefined) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return formatIstDateTime(value, "—");
 }
 
 export function ShopifyImportForm() {

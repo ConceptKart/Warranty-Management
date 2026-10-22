@@ -133,17 +133,13 @@ Effects:
 
 ---
 
-### 1.8 Hostinger `DATETIME` vs IST display
+### 1.8 Hostinger `DATETIME` vs IST display — done
 
 | | |
 |---|---|
-| **Tag** | Conflict |
+| **Tag** | Done |
 | **PHP** | `date_default_timezone_set('Asia/Kolkata')`. `NOW()` and `date()` are IST if the PHP host is IST. |
-| **Next** | Node/`new Date()` is UTC unless formatted with `timeZone: 'Asia/Kolkata'`. MySQL `NOW()` follows the Hostinger session TZ. |
-
-Ticket created-at, AWB created-at, and packer handover times can look shifted by 5:30 if one side stores IST-naive and the other reads it as UTC.
-
-**Remaining change:** one rule for write + read (IST wall-clock in MySQL, always format as IST in UI). Audit list, details, packer handover, emails, CSV export (`ticketsToCsvRows` currently emits ISO UTC).
+| **Next** | `src/lib/datetime/ist.ts` — MySQL DATETIME is IST wall-clock. Prisma Date UTC fields are those digits; UI/CSV print them as IST and do not add +5:30. JS writes use `nowIstSql()`. Return AWB / Shipway last-updated still treat naive values as UTC like PHP. |
 
 ---
 
@@ -306,7 +302,7 @@ From `DEPLOY_DOKPLOY.md` — still required for PHP and Next to stop fighting:
 4. **Assign AWB address parse** (2.1) — stops Amazon pickup/forward conflicts on the details page.
 5. **BaseLinker clone** (1.6) — done. Customer-edit BL push (1.7) still local-only.
 6. **Status reason/notes + role-gated ticket buttons** (2.2 / 2.4) — done.
-7. **IST/DATETIME audit** (1.8) if created-at / handover times still look wrong after cutover.
+7. **IST/DATETIME audit** (1.8) — done.
 8. **Historical WR↔RP backfill** only if you want old tickets renamed. New Change Type clicks already rename.
 
 ---
