@@ -16,6 +16,10 @@ import {
   shopifyClaimNumberVariants,
   shopifyOrderIdVariants,
 } from "@/lib/portal/verify-order";
+import {
+  integrateShopifyClaimClone,
+  type CloneSelectedProduct,
+} from "@/lib/baselinker/clone-order";
 
 export type ClaimInput = {
   customerEmail: string;
@@ -629,6 +633,50 @@ async function getOrCreateProductId(
   throw new Error("Unable to resolve product for claim");
 }
 
+function parseSelectedCloneProducts(
+  session: PortalSessionData,
+  selectedProduct: {
+    product_id?: string | number;
+    variant_id?: string | number;
+    sku?: string;
+    name?: string;
+    quantity?: number;
+  } | null,
+): CloneSelectedProduct[] {
+  if (session.selectedProductsJson) {
+    try {
+      const parsed = JSON.parse(session.selectedProductsJson) as Array<{
+        product_id?: string | number;
+        variant_id?: string | number;
+        sku?: string;
+        name?: string;
+        quantity?: number;
+      }>;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((row) => ({
+          product_id: row.product_id,
+          variant_id: row.variant_id,
+          sku: row.sku,
+          name: row.name,
+          quantity: Number(row.quantity ?? 1) || 1,
+        }));
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!selectedProduct) return [];
+  return [
+    {
+      product_id: selectedProduct.product_id,
+      variant_id: selectedProduct.variant_id,
+      sku: selectedProduct.sku,
+      name: selectedProduct.name,
+      quantity: Number(selectedProduct.quantity ?? 1) || 1,
+    },
+  ];
+}
+
 function resolveSelectedProduct(orderData: PortalOrderData, session: PortalSessionData) {
   const products = orderData.products;
   if (session.selectedProductsJson) {
@@ -909,6 +957,41 @@ export async function submitPortalClaim(
         ${ticketDbId}, NULL, ${statusId}, 'customer', ${historyReason}, NOW()
       )
     `;
+
+    if (sourcePlatform === "shopify") {
+      try {
+        const selectedForClone = parseSelectedCloneProducts(
+          session,
+          selectedProduct,
+        );
+        const cloneUrls = [
+          ...extractPreUploadedUrls(input),
+          ...upload.files
+            .map((file) => file.remote_url)
+            .filter((url): url is string => Boolean(url)),
+        ].filter((url, index, all) => all.indexOf(url) === index);
+        const clone = await integrateShopifyClaimClone({
+          shopifyOrderId: baseOrderId,
+          selectedProducts: selectedForClone,
+          ticketNumber: savedTicketNumber,
+          issueDescription: input.issueDescription.trim(),
+          claimType,
+          uploadedUrls: cloneUrls,
+        });
+        if (clone.success) {
+          await prisma.$executeRaw`
+            UPDATE warranty_tickets
+            SET baselinker_integrated = 1,
+                cloned_from_order_id = ${clone.cloned_order_id}
+            WHERE ticket_id = ${ticketDbId}
+          `;
+        } else {
+          console.error("[submitPortalClaim] BaseLinker clone:", clone.error);
+        }
+      } catch (cloneErr) {
+        console.error("[submitPortalClaim] BaseLinker clone:", cloneErr);
+      }
+    }
 
     try {
       await sendForStatus(ticketDbId, "pending");

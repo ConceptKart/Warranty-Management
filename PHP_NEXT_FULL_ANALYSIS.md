@@ -269,7 +269,7 @@ Verify is **local tables only**. No Shopify Admin fallback. No Shopify-delivered
 
 Ticket seq: Amazon `MAX+1`; Website `WarrantyModel::generateUniqueTicketNumber()` **walks holes** (`0001`, `0002`, … first free). Month is PHP `date('Ym')` (server TZ).
 
-Website/legacy BaseLinker submit still **clones** the order and writes fields **5344, 5345, 5356, 6397, 6398** (and 4467 on some paths). Amazon/Shopify live submit is local (`baselinker_integrated = 0`) — same as Next.
+Website/legacy BaseLinker submit still **clones** the order and writes fields **5344, 5345, 5356, 6397, 6398** (and 4467 on some paths). Amazon submit stays local. Next Website/Shopify submit now clones after the ticket is saved (see 6.1).
 
 ### 4.2 Admin PHP pages
 
@@ -335,9 +335,7 @@ If both PHP cron and Next cron run, they double-write the same tables.
 
 These are the items still to build or decide. Not “screens we forgot,” but **rules PHP still has or Next still does differently**.
 
-### 6.1 Must-have if warehouse still uses BaseLinker clones
-
-**Website claim does not clone a BaseLinker order.**
+### 6.1 BaseLinker clone — done (Website / Shopify only)
 
 PHP `submitWarrantyClaim()` / `cloneOrderWithSelectedProducts()`:
 
@@ -345,9 +343,9 @@ PHP `submitWarrantyClaim()` / `cloneOrderWithSelectedProducts()`:
 - Write **5344** = `warranty` or `10-Day Replacement`.
 - Write **5345** = ticket number, **5356** = description, **6397/6398** = upload URLs.
 
-Next writes the ticket locally only. IGI / “find the clone in BaseLinker” will not see Next Website claims.
+Next now does the same after the ticket is saved (`src/lib/baselinker/clone-order.ts`). Ticket first; clone failure does not drop the claim. Shopify products match original SKUs because Next session `product_id` is synthetic. Amazon stays local.
 
-**Customer edit** in Next updates `customers` only. PHP `update_customer.php` can push name/phone/address into BaseLinker.
+**Customer edit** in Next still updates `customers` only. PHP `update_customer.php` can push name/phone/address into BaseLinker.
 
 ### 6.2 Return AWB page (new in this zip)
 
@@ -436,7 +434,7 @@ Both stacks: validator leftover, no real verify. Port only if you start taking F
 2. **Port Return AWB** (`return_inventory_sync`) — it is in the PHP navbar and missing here.
 3. **Align warehouses** to `9000461` / `9002929` if CKPL moved.
 4. **Assign AWB address parse** (stops Amazon pickup/forward form failures).
-5. **Decide BaseLinker clone** — only if warehouse still searches cloned orders.
+5. **BaseLinker clone** — done (Website / Shopify).
 6. Status notes + role-gated ticket buttons.
 7. IST/`DATETIME` audit if times still look wrong.
 8. Historical `WR`↔`RP` backfill only if you want old tickets renamed.

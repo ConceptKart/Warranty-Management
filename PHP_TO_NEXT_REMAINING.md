@@ -111,17 +111,13 @@ Effects:
 
 ---
 
-### 1.6 Website claims no longer clone BaseLinker orders
+### 1.6 Website claims clone BaseLinker orders — done
 
 | | |
 |---|---|
-| **Tag** | Missing / Conflict |
+| **Tag** | Done |
 | **PHP** | `submitShopifyWarrantyClaim()` / `submitWarrantyClaim()` clone the BL order and set custom fields **5344** (warranty vs 10-day replacement), **5345** (ticket number), **5356** (description), **6397/6398** (upload URLs). Sets `baselinker_integrated = 1`. |
-| **Next** | `src/lib/portal/submit-claim.ts` writes **local** `customers` / `orders` / `warranty_tickets` / attachments only. `baselinker_integrated = 0`. Upload URLs are stored on the ticket, not pushed to BL. |
-
-Warehouse / IGI / “find it in BaseLinker” flows that depended on the cloned order will not see Next claims.
-
-**Remaining change:** port BL clone + field updates on successful Website claim **if** operations still need the cloned order. Amazon PHP path also stayed local — that part already matches.
+| **Next** | After the ticket is saved, `src/lib/baselinker/clone-order.ts` clones selected products to warehouse **9001702**, status **8111**, then writes the same custom fields. Success sets `baselinker_integrated = 1` and `cloned_from_order_id`. Clone failure is logged; the claim stays. Amazon stays local. |
 
 ---
 
@@ -310,7 +306,7 @@ From `DEPLOY_DOKPLOY.md` — still required for PHP and Next to stop fighting:
 2. **Stop PHP writes** (portal + admin tickets + ticket-details). Leave PHP up only for emergency rollback.
 3. **Repoint** Amazon/Shopify/shipment crons and the Shipway webhook to Next. Turn off PHP cron/webhook.
 4. **Assign AWB address parse** (2.1) — stops Amazon pickup/forward conflicts on the details page.
-5. **Decide on BaseLinker clone** (1.6 / 1.7). If warehouse still searches cloned orders, this is the next real feature gap.
+5. **BaseLinker clone** (1.6) — done. Customer-edit BL push (1.7) still local-only.
 6. **Status reason/notes + role-gated ticket buttons** (2.2 / 2.4).
 7. **IST/DATETIME audit** (1.8) if created-at / handover times still look wrong after cutover.
 8. **Historical WR↔RP backfill** only if you want old tickets renamed. New Change Type clicks already rename.
