@@ -53,6 +53,8 @@ export function TicketActions({
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [changingType, setChangingType] = useState(false);
   const [statusId, setStatusId] = useState(String(currentStatusId));
+  const [statusReason, setStatusReason] = useState("");
+  const [statusNotes, setStatusNotes] = useState("");
   const [emailTemplate, setEmailTemplate] = useState("");
   const [comment, setComment] = useState("");
   const [emailTo, setEmailTo] = useState(customerEmail);
@@ -134,8 +136,8 @@ export function TicketActions({
         body: JSON.stringify({
           ticket_id: ticketId,
           status_id: Number(statusId),
-          reason: "",
-          notes: "",
+          reason: statusReason.trim(),
+          notes: statusNotes.trim(),
         }),
       });
       const data = await res.json();
@@ -185,6 +187,8 @@ export function TicketActions({
       }
 
       alert(msg);
+      setStatusReason("");
+      setStatusNotes("");
       setStatusOpen(false);
       router.refresh();
     } finally {
@@ -256,7 +260,13 @@ export function TicketActions({
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => setStatusOpen(true)}
+            onClick={() => {
+              setStatusId(String(currentStatusId));
+              setStatusReason("");
+              setStatusNotes("");
+              setError("");
+              setStatusOpen(true);
+            }}
           >
             <i className="fas fa-sync-alt me-1" />
             Update Status
@@ -379,6 +389,34 @@ export function TicketActions({
                 </div>
               </div>
             ) : null}
+
+            <div className="mb-3">
+              <label className="form-label" htmlFor="status_reason">
+                Reason for Change
+              </label>
+              <input
+                id="status_reason"
+                className="form-control"
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                maxLength={500}
+                placeholder="Optional — shown on the status history"
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="status_notes">
+                Notes
+              </label>
+              <textarea
+                id="status_notes"
+                className="form-control"
+                value={statusNotes}
+                onChange={(e) => setStatusNotes(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="Optional internal notes for this status change"
+              />
+            </div>
 
             {error ? <div className="alert alert-danger py-2">{error}</div> : null}
             <div className="d-flex justify-content-end gap-2">

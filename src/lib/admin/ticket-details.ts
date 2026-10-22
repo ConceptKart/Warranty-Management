@@ -855,6 +855,14 @@ export async function updateTicketPriority(ticketId: number, priority: string) {
   return { success: true as const };
 }
 
+/** Trim and cap status history reason/notes like PHP POST `reason` / `notes`. */
+export function sanitizeStatusNote(value: unknown, max = 2000): string {
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .slice(0, max);
+}
+
 /** Mirrors AdminController::updateTicketStatus (incl. status emails; accepted skipped) */
 export async function updateTicketStatus(
   ticketId: number,
@@ -863,6 +871,8 @@ export async function updateTicketStatus(
   reason = "",
   notes = "",
 ) {
+  reason = sanitizeStatusNote(reason, 500);
+  notes = sanitizeStatusNote(notes, 2000);
   const current = await prisma.$queryRaw<Array<{ status_id: number }>>`
     SELECT status_id FROM warranty_tickets WHERE ticket_id = ${ticketId} LIMIT 1
   `;

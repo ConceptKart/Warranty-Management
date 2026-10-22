@@ -318,7 +318,7 @@ If both PHP cron and Next cron run, they double-write the same tables.
 | Accepted → auto return | Yes | Yes | |
 | Replacement EAN + IGI | Warehouses 9000461 / **9002929** | 9000461 / **9001939** | Conflict |
 | Assign AWB address autofill | PHP parse helper | Missing in modal | Remaining |
-| Status reason/notes | Yes | API yes, UI empty | Remaining |
+| Status reason/notes | Yes | Modal + history | Done |
 | Custom / accepted emails | Yes | Yes (split calls) | |
 | Customer edit → BaseLinker | `update_customer.php` | Local only | Remaining |
 | Shopify / Amazon import pages | Yes (orphan URLs) | Yes (in nav) | Next is ahead |
@@ -365,8 +365,8 @@ If CKPL is now `9002929`, Next IGI/stock is looking at the wrong warehouse.
 ### 6.4 Operator UI still short
 
 1. **Assign AWB modal** — user must type city/state/PIN. Bulk Forward and auto-return already use `parseCustomerAddress`. Same helper should pre-fill the modal (Amazon addresses are one blob with an embedded 6-digit PIN).
-2. **Status modal** — no reason/notes boxes (API already accepts them).
-3. **Tickets list buttons** — Bulk Forward / Packer / Change Type show for every viewer; APIs are stricter.
+2. **Status modal** — reason/notes boxes now post to history (done).
+3. **Tickets list buttons** — Bulk Forward / Change Type / Refresh hide without the matching permission (done).
 4. **Accepted email** — second HTTP call after status; status can succeed and email fail.
 5. **Customer-visible comments** — API supports `is_internal: false`; UI never uses it.
 6. **Admin session 8 hours** vs PHP long cookie.
@@ -435,7 +435,7 @@ Both stacks: validator leftover, no real verify. Port only if you start taking F
 3. **Align warehouses** to `9000461` / `9002929` if CKPL moved.
 4. **Assign AWB address parse** (stops Amazon pickup/forward form failures).
 5. **BaseLinker clone** — done (Website / Shopify).
-6. Status notes + role-gated ticket buttons.
+6. Status notes + role-gated ticket buttons — done.
 7. IST/`DATETIME` audit if times still look wrong.
 8. Historical `WR`↔`RP` backfill only if you want old tickets renamed.
 

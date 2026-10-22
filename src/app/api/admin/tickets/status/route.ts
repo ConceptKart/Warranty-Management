@@ -30,8 +30,8 @@ export async function POST(request: Request) {
     ticketId,
     statusId,
     user.username,
-    body.reason ?? "",
-    body.notes ?? "",
+    body.reason,
+    body.notes,
   );
 
   return NextResponse.json(result, { status: result.success ? 200 : 400 });

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/get-session";
+import { requireAdminPermission } from "@/lib/auth/require-permission";
 import { bulkForwardShipments } from "@/lib/admin/logistics-ops";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.adminUser) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminPermission("assign_awb");
+  if (!auth.ok) return auth.response;
+  const { user } = auth;
 
   const body = (await request.json()) as { ticket_ids?: number[] };
   const ticketIds = Array.isArray(body.ticket_ids)
@@ -22,9 +21,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await bulkForwardShipments(
-    ticketIds,
-    session.adminUser.username,
-  );
+  const result = await bulkForwardShipments(ticketIds, user.username);
   return NextResponse.json(result);
 }

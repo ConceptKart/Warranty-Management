@@ -86,11 +86,19 @@ export function TicketsLogistics({
   ticketTypes,
   sortAscHref,
   sortDescHref,
+  canRefreshAwb = true,
+  canPackerHandover = true,
+  canBulkForward = true,
+  canChangeType = true,
 }: {
   tickets: TicketRow[];
   ticketTypes: TicketTypeOption[];
   sortAscHref?: string;
   sortDescHref?: string;
+  canRefreshAwb?: boolean;
+  canPackerHandover?: boolean;
+  canBulkForward?: boolean;
+  canChangeType?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<number[]>([]);
@@ -392,40 +400,46 @@ export function TicketsLogistics({
   return (
     <>
       <div className="d-flex flex-wrap gap-2 mb-3">
-        <button
-          type="button"
-          className="btn btn-outline-primary"
-          disabled={refreshing}
-          onClick={() => void refreshAwbStatuses()}
-        >
-          <i className={`fas fa-sync-alt me-1 ${refreshing ? "fa-spin" : ""}`} />
-          Refresh AWB Statuses
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-warning"
-          onClick={() => {
-            setPackerOpen(true);
-            void loadPackerOrders();
-          }}
-        >
-          <i className="fas fa-box-open me-1" />
-          Packer Handover
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-success"
-          onClick={() => {
-            setBulkResults(null);
-            setEanQuery("");
-            setEanTicket(null);
-            setEanError("");
-            setBulkOpen(true);
-          }}
-        >
-          <i className="fas fa-truck me-1" />
-          Bulk Forward ({selected.length})
-        </button>
+        {canRefreshAwb ? (
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            disabled={refreshing}
+            onClick={() => void refreshAwbStatuses()}
+          >
+            <i className={`fas fa-sync-alt me-1 ${refreshing ? "fa-spin" : ""}`} />
+            Refresh AWB Statuses
+          </button>
+        ) : null}
+        {canPackerHandover ? (
+          <button
+            type="button"
+            className="btn btn-outline-warning"
+            onClick={() => {
+              setPackerOpen(true);
+              void loadPackerOrders();
+            }}
+          >
+            <i className="fas fa-box-open me-1" />
+            Packer Handover
+          </button>
+        ) : null}
+        {canBulkForward ? (
+          <button
+            type="button"
+            className="btn btn-outline-success"
+            onClick={() => {
+              setBulkResults(null);
+              setEanQuery("");
+              setEanTicket(null);
+              setEanError("");
+              setBulkOpen(true);
+            }}
+          >
+            <i className="fas fa-truck me-1" />
+            Bulk Forward ({selected.length})
+          </button>
+        ) : null}
       </div>
 
       {message ? (
@@ -576,18 +590,20 @@ export function TicketsLogistics({
                             >
                               <i className="fas fa-eye" />
                             </Link>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-warning"
-                              title="Change Order Type"
-                              onClick={() => {
-                                setChangeTypeTicket(ticket);
-                                setSelectedTypeId(null);
-                              }}
-                            >
-                              <i className="fas fa-exchange-alt me-1" />
-                              Type
-                            </button>
+                            {canChangeType ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-warning"
+                                title="Change Order Type"
+                                onClick={() => {
+                                  setChangeTypeTicket(ticket);
+                                  setSelectedTypeId(null);
+                                }}
+                              >
+                                <i className="fas fa-exchange-alt me-1" />
+                                Type
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

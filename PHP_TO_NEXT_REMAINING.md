@@ -170,9 +170,9 @@ Next `AssignAwbButton` puts the raw address in the street box and leaves city/st
 
 **Remaining change:** on open, parse `defaultAddress` into street / city / state / PIN (same helper as bulk forward).
 
-### 2.2 Status modal has no reason / notes — Missing
+### 2.2 Status modal reason / notes — done
 
-`updateTicketStatus` accepts `reason` and `notes`. The Next modal always posts `""`. PHP has those fields.
+`updateTicketStatus` accepts `reason` and `notes`. Next status modal now posts them (500 / 2000 chars). History shows **Reason:** / **Notes:** like PHP.
 
 ### 2.3 Packer Handover AWB totals — Next-only fix (deploy)
 
@@ -180,11 +180,9 @@ PHP shows `{n} order(s)`. Next now shows **total AWBs / pending / handed over** 
 
 PHP table header also has **Scanned EAN**; the PHP JS renderer never fills that column. **Skip** (PHP dead column).
 
-### 2.4 Tickets-list buttons are not permission-gated — Conflict
+### 2.4 Tickets-list buttons are permission-gated — done
 
-PHP mostly only required login. Next APIs differ (`view_all_tickets`, `edit_tickets`, `assign_awb`) but Bulk Forward / Packer / Change Type still show for every tickets viewer.
-
-**Remaining change:** hide buttons the role cannot call.
+Bulk Forward requires `assign_awb`. Change Type requires `edit_tickets`. Refresh AWB requires shipment view/assign. Packer Handover stays on `view_all_tickets` (same as its API). Packer role no longer sees Bulk Forward.
 
 ### 2.5 Reports and delete-ticket UI — Missing
 
@@ -307,7 +305,7 @@ From `DEPLOY_DOKPLOY.md` — still required for PHP and Next to stop fighting:
 3. **Repoint** Amazon/Shopify/shipment crons and the Shipway webhook to Next. Turn off PHP cron/webhook.
 4. **Assign AWB address parse** (2.1) — stops Amazon pickup/forward conflicts on the details page.
 5. **BaseLinker clone** (1.6) — done. Customer-edit BL push (1.7) still local-only.
-6. **Status reason/notes + role-gated ticket buttons** (2.2 / 2.4).
+6. **Status reason/notes + role-gated ticket buttons** (2.2 / 2.4) — done.
 7. **IST/DATETIME audit** (1.8) if created-at / handover times still look wrong after cutover.
 8. **Historical WR↔RP backfill** only if you want old tickets renamed. New Change Type clicks already rename.
 

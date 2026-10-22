@@ -7,7 +7,7 @@ import {
 } from "@/lib/admin/tickets";
 import { TicketsLogistics } from "@/components/admin/tickets-logistics";
 import { getSession } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, ticketListActions } from "@/lib/auth/permissions";
 import { redirect } from "next/navigation";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -56,6 +56,7 @@ export default async function AdminTicketsPage({
   const session = await getSession();
   if (!session.adminUser) redirect("/admin/login");
   const canExport = hasPermission(session.adminUser.role, "export_data");
+  const listActions = ticketListActions(session.adminUser.role);
 
   const sp = await searchParams;
   const raw: TicketFilters = {
@@ -402,6 +403,10 @@ export default async function AdminTicketsPage({
           page: 1,
           per_page: perPage,
         })}`}
+        canRefreshAwb={listActions.canRefreshAwb}
+        canPackerHandover={listActions.canPackerHandover}
+        canBulkForward={listActions.canBulkForward}
+        canChangeType={listActions.canChangeType}
       />
     </>
   );

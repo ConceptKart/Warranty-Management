@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/get-session";
+import { requireAdminPermission } from "@/lib/auth/require-permission";
 import { lookupAwbStatusesByTicketIds } from "@/lib/admin/logistics-ops";
 import { applyShipwayStatusUpdatesFromLookup } from "@/lib/admin/shipway-status-sync";
 
@@ -7,10 +7,13 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session.adminUser) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdminPermission([
+    "assign_awb",
+    "view_shipment_info",
+    "manage_shipments",
+  ]);
+  if (!auth.ok) return auth.response;
+  const { user } = auth;
 
   const body = (await request.json()) as { ticket_ids?: number[] };
   const ticketIds = Array.isArray(body.ticket_ids)
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
     const data = await lookupAwbStatusesByTicketIds(ticketIds);
     const statusUpdates = await applyShipwayStatusUpdatesFromLookup(
       data,
-      session.adminUser.username,
+      user.username,
     );
     return NextResponse.json({ success: true, data, status_updates: statusUpdates });
   } catch (error) {

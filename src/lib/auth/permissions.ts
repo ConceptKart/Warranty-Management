@@ -84,3 +84,17 @@ export function listPermissions(role: string | null | undefined): AdminPermissio
   if (!role) return [];
   return [...(ROLE_PERMISSIONS[role.toLowerCase()] ?? [])];
 }
+
+/** Tickets-list buttons that match the APIs those actions call. */
+export function ticketListActions(role: string | null | undefined) {
+  return {
+    canRefreshAwb: hasAnyPermission(role, [
+      "assign_awb",
+      "view_shipment_info",
+      "manage_shipments",
+    ]),
+    canPackerHandover: hasPermission(role, "view_all_tickets"),
+    canBulkForward: hasPermission(role, "assign_awb"),
+    canChangeType: hasPermission(role, "edit_tickets"),
+  };
+}

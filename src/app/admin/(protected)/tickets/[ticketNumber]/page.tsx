@@ -297,10 +297,14 @@ export default async function TicketDetailsPage({
                       {item.changed_by} · {formatIst(item.changed_at)}
                     </div>
                     {item.change_reason ? (
-                      <div className="small mt-1">{item.change_reason}</div>
+                      <div className="small mt-1">
+                        <strong>Reason:</strong> {item.change_reason}
+                      </div>
                     ) : null}
                     {item.notes ? (
-                      <div className="small mt-1">{item.notes}</div>
+                      <div className="small mt-1 whitespace-pre-wrap">
+                        <strong>Notes:</strong> {item.notes}
+                      </div>
                     ) : null}
                   </div>
                 ))}
