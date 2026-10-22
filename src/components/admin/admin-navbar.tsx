@@ -28,6 +28,7 @@ export function AdminNavbar({
 
   const dashActive = pathname === "/admin";
   const ticketsActive = pathname.startsWith("/admin/tickets");
+  const returnAwbActive = pathname.startsWith("/admin/return-awb");
   const shipmentsActive = pathname.startsWith("/admin/shipments");
   const trackingActive = pathname.startsWith("/admin/tracking");
   const shipwayLookupActive = pathname.startsWith("/admin/shipway-tracker");
@@ -121,6 +122,15 @@ export function AdminNavbar({
                 onClick={closeNav}
               >
                 Tickets
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link
+                className={`nav-link${returnAwbActive ? " active" : ""}`}
+                href="/admin/return-awb"
+                onClick={closeNav}
+              >
+                Return AWB
               </Link>
             </li>
             {canManageShipments ? (
