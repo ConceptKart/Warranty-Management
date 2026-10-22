@@ -125,45 +125,76 @@ function columnValues(rows: Array<Record<string, unknown>>) {
     .filter(Boolean);
 }
 
-export async function getReturnAwbFilterOptions(): Promise<ReturnAwbFilterOptions> {
-  try {
-    const [returnTypes, sources, conditions, companies] = await Promise.all([
-      prisma.$queryRaw<Array<{ return_type: string }>>`
-        SELECT DISTINCT return_type
-        FROM return_inventory_sync
-        WHERE return_type IS NOT NULL AND return_type != ''
-        ORDER BY return_type ASC
-      `,
-      prisma.$queryRaw<Array<{ source: string }>>`
-        SELECT DISTINCT source
-        FROM return_inventory_sync
-        WHERE source IS NOT NULL AND source != ''
-        ORDER BY source ASC
-      `,
-      prisma.$queryRaw<Array<{ condition: string }>>`
-        SELECT DISTINCT \`condition\`
-        FROM return_inventory_sync
-        WHERE \`condition\` IS NOT NULL AND \`condition\` != ''
-        ORDER BY \`condition\` ASC
-      `,
-      prisma.$queryRaw<Array<{ company: string }>>`
-        SELECT DISTINCT company
-        FROM return_inventory_sync
-        WHERE company IS NOT NULL AND company != ''
-        ORDER BY company ASC
-      `,
-    ]);
-
-    return {
-      returnTypes: columnValues(returnTypes),
-      sources: columnValues(sources),
-      conditions: columnValues(conditions),
-      companies: columnValues(companies),
-    };
-  } catch (error) {
-    console.error("[getReturnAwbFilterOptions]", error);
-    return { returnTypes: [], sources: [], conditions: [], companies: [] };
+function loadErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/doesn't exist|not found|unknown table|no such table/i.test(message)) {
+    return "Return inventory table (return_inventory_sync) was not found on this database.";
   }
+  if (/condition/i.test(message) && /syntax|reserved/i.test(message)) {
+    return "Unable to load Return AWB data (condition column query failed).";
+  }
+  return "Unable to load Return AWB data.";
+}
+
+async function distinctColumn(columnSql: string) {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT DISTINCT ${columnSql} AS value
+       FROM return_inventory_sync
+       WHERE ${columnSql} IS NOT NULL AND ${columnSql} != ''
+       ORDER BY ${columnSql} ASC`,
+    );
+    return columnValues(rows);
+  } catch (error) {
+    console.error("[getReturnAwbFilterOptions]", columnSql, error);
+    return [];
+  }
+}
+
+export async function getReturnAwbFilterOptions(): Promise<ReturnAwbFilterOptions> {
+  const [returnTypes, sources, conditions, companies] = await Promise.all([
+    distinctColumn("return_type"),
+    distinctColumn("source"),
+    distinctColumn("`condition`"),
+    distinctColumn("company"),
+  ]);
+  return { returnTypes, sources, conditions, companies };
+}
+
+function buildReturnAwbWhere(filters: ReturnAwbFilters) {
+  const where: string[] = [];
+  const params: string[] = [];
+  const like = (column: string, value: string) => {
+    where.push(`${column} LIKE ?`);
+    params.push(`%${value}%`);
+  };
+  const exact = (column: string, value: string) => {
+    where.push(`${column} = ?`);
+    params.push(value);
+  };
+
+  const awb = trimFilter(filters.awb_number);
+  const orderId = trimFilter(filters.order_id);
+  const sku = trimFilter(filters.sku);
+  const ean = trimFilter(filters.ean);
+  const returnType = trimFilter(filters.return_type);
+  const source = trimFilter(filters.source);
+  const condition = trimFilter(filters.condition);
+  const company = trimFilter(filters.company);
+
+  if (awb) like("awb_number", awb);
+  if (orderId) like("order_id", orderId);
+  if (sku) like("sku", sku);
+  if (ean) like("ean", ean);
+  if (returnType) exact("return_type", returnType);
+  if (source) exact("source", source);
+  if (condition) exact("`condition`", condition);
+  if (company) exact("company", company);
+
+  return {
+    sql: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params,
+  };
 }
 
 export async function getReturnAwbRows(
@@ -179,32 +210,15 @@ export async function getReturnAwbRows(
   error: string | null;
 }> {
   const paging = resolveReturnAwbPaging(page, perPage);
-  const awb = trimFilter(filters.awb_number);
-  const orderId = trimFilter(filters.order_id);
-  const sku = trimFilter(filters.sku);
-  const ean = trimFilter(filters.ean);
-  const returnType = trimFilter(filters.return_type);
-  const source = trimFilter(filters.source);
-  const condition = trimFilter(filters.condition);
-  const company = trimFilter(filters.company);
-  const awbLike = `%${awb}%`;
-  const orderLike = `%${orderId}%`;
-  const skuLike = `%${sku}%`;
-  const eanLike = `%${ean}%`;
+  const { sql: whereSql, params } = buildReturnAwbWhere(filters);
 
   try {
-    const countRows = await prisma.$queryRaw<Array<{ c: bigint | number }>>`
-      SELECT COUNT(*) AS c
-      FROM return_inventory_sync
-      WHERE (${awb} = '' OR awb_number LIKE ${awbLike})
-        AND (${orderId} = '' OR order_id LIKE ${orderLike})
-        AND (${sku} = '' OR sku LIKE ${skuLike})
-        AND (${ean} = '' OR ean LIKE ${eanLike})
-        AND (${returnType} = '' OR return_type = ${returnType})
-        AND (${source} = '' OR source = ${source})
-        AND (${condition} = '' OR \`condition\` = ${condition})
-        AND (${company} = '' OR company = ${company})
-    `;
+    const countRows = await prisma.$queryRawUnsafe<
+      Array<{ c: bigint | number }>
+    >(
+      `SELECT COUNT(*) AS c FROM return_inventory_sync ${whereSql}`,
+      ...params,
+    );
     const total = toNumber(countRows[0]?.c);
     const totalPages = Math.max(1, Math.ceil((total || 0) / paging.perPage));
     const safePage = Math.min(paging.page, totalPages);
@@ -213,8 +227,8 @@ export async function getReturnAwbRows(
     const rows =
       total === 0
         ? []
-        : await prisma.$queryRaw<ReturnAwbRow[]>`
-            SELECT
+        : await prisma.$queryRawUnsafe<ReturnAwbRow[]>(
+            `SELECT
               id,
               awb_number,
               order_id,
@@ -229,17 +243,13 @@ export async function getReturnAwbRows(
               company,
               created_at
             FROM return_inventory_sync
-            WHERE (${awb} = '' OR awb_number LIKE ${awbLike})
-              AND (${orderId} = '' OR order_id LIKE ${orderLike})
-              AND (${sku} = '' OR sku LIKE ${skuLike})
-              AND (${ean} = '' OR ean LIKE ${eanLike})
-              AND (${returnType} = '' OR return_type = ${returnType})
-              AND (${source} = '' OR source = ${source})
-              AND (${condition} = '' OR \`condition\` = ${condition})
-              AND (${company} = '' OR company = ${company})
+            ${whereSql}
             ORDER BY id DESC
-            LIMIT ${paging.perPage} OFFSET ${offset}
-          `;
+            LIMIT ? OFFSET ?`,
+            ...params,
+            paging.perPage,
+            offset,
+          );
 
     return {
       rows,
@@ -257,7 +267,7 @@ export async function getReturnAwbRows(
       page: 1,
       per_page: paging.perPage,
       total_pages: 1,
-      error: "Unable to load Return AWB data.",
+      error: loadErrorMessage(error),
     };
   }
 }

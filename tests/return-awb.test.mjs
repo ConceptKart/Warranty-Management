@@ -6,7 +6,7 @@ import {
   resolveReturnAwbPaging,
   returnAwbConditionClass,
 } from "@/lib/admin/return-awb";
-import { calls, resetDb, setQueryRaw } from "@/lib/db";
+import { calls, resetDb, setQueryRawUnsafe } from "@/lib/db";
 
 const row = {
   id: 88,
@@ -52,7 +52,7 @@ test("per-page only allows 10 / 25 / 50 / 100 and defaults to 10", () => {
 });
 
 test("search binds LIKE filters and orders newest id first", async () => {
-  setQueryRaw(async (sql) => {
+  setQueryRawUnsafe(async (sql) => {
     if (sql.includes("COUNT(*)")) return [{ c: 1 }];
     return [row];
   });
@@ -68,7 +68,8 @@ test("search binds LIKE filters and orders newest id first", async () => {
   assert.equal(result.rows[0].awb_number, "22679040660582");
 
   const list = calls.find(
-    (call) => call.kind === "queryRaw" && String(call.sql).includes("ORDER BY"),
+    (call) =>
+      call.kind === "queryRawUnsafe" && String(call.sql).includes("ORDER BY"),
   );
   assert.ok(list);
   assert.match(String(list.sql), /ORDER BY id DESC/i);
@@ -79,7 +80,7 @@ test("search binds LIKE filters and orders newest id first", async () => {
 });
 
 test("exact dropdown filters bind return type / source / condition / company", async () => {
-  setQueryRaw(async (sql) => {
+  setQueryRawUnsafe(async (sql) => {
     if (sql.includes("COUNT(*)")) return [{ c: 1 }];
     return [row];
   });
@@ -96,21 +97,23 @@ test("exact dropdown filters bind return type / source / condition / company", a
   );
 
   const list = calls.find(
-    (call) => call.kind === "queryRaw" && String(call.sql).includes("ORDER BY"),
+    (call) =>
+      call.kind === "queryRawUnsafe" && String(call.sql).includes("ORDER BY"),
   );
   assert.ok(list.values.includes("Customer Return"));
   assert.ok(list.values.includes("Website"));
   assert.ok(list.values.includes("Good"));
   assert.ok(list.values.includes("SVPL"));
   assert.ok(list.values.includes(25));
+  assert.match(String(list.sql), /`condition` = \?/);
 });
 
 test("missing table becomes a page error instead of throwing", async () => {
-  setQueryRaw(async () => {
+  setQueryRawUnsafe(async () => {
     throw new Error("Table 'return_inventory_sync' doesn't exist");
   });
 
   const result = await getReturnAwbRows({}, 1, 10);
-  assert.equal(result.error, "Unable to load Return AWB data.");
+  assert.match(result.error ?? "", /return_inventory_sync/);
   assert.equal(result.rows.length, 0);
 });
