@@ -10,7 +10,9 @@ import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
 
 export function shopifyOrderIdVariants(raw: string) {
   const trimmed = raw.trim();
-  const withoutClaim = trimmed.replace(/-[WRwr]$/, "");
+  const withoutClaim = trimmed
+    .replace(/-\d{2}[WRwr]$/, "")
+    .replace(/-[WRwr]$/, "");
   const digits = withoutClaim.replace(/#?CK/gi, "").replace(/\D/g, "");
   const bareCk = digits ? `CK${digits}` : withoutClaim.replace(/^#/, "");
   const hashedCk = digits ? `#CK${digits}` : bareCk ? `#${bareCk}` : "";
@@ -19,6 +21,36 @@ export function shopifyOrderIdVariants(raw: string) {
       [trimmed, withoutClaim, bareCk, hashedCk, digits].filter(Boolean),
     ),
   ];
+}
+
+/** Shopify name stored in shopify_orders / claims: always #CK{digits}. */
+export function canonicalShopifyOrderId(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  const variants = shopifyOrderIdVariants(trimmed);
+  return (
+    variants.find((id) => /^#CK\d+$/i.test(id)) ||
+    variants.find((id) => /^#CK/i.test(id)) ||
+    variants.find((id) => id.startsWith("#")) ||
+    trimmed
+  );
+}
+
+export function shopifyClaimNumberVariants(raw: string) {
+  const numbers = new Set<string>();
+  for (const variant of shopifyOrderIdVariants(raw)) {
+    numbers.add(`${variant}-W`);
+    numbers.add(`${variant}-R`);
+  }
+  return [...numbers];
+}
+
+export function padUniqueIds(ids: string[], size: number) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return Array.from({ length: size }, () => "");
+  const out = unique.slice(0, size);
+  while (out.length < size) out.push(unique[0]!);
+  return out;
 }
 
 function earliestDate(dates: Array<Date | string | null | undefined>) {
@@ -539,6 +571,12 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
       };
     }
 
+    const storedShopifyId = orderItems
+      .map((item) => String(item.shopify_order_id ?? "").trim())
+      .find((id) => /^#CK/i.test(id) || id.startsWith("#"));
+    const canonicalOrderId =
+      storedShopifyId || canonicalShopifyOrderId(hashedId || shopifyOrderId);
+
     const orderTimestamp = orderDate
       ? Math.floor(orderDate.getTime() / 1000)
       : Math.floor(Date.now() / 1000);
@@ -546,9 +584,9 @@ async function verifyShopifyOrder(shopifyOrderIdRaw: string): Promise<VerifyResu
     return {
       success: true,
       order: {
-        order_id: shopifyOrderId,
+        order_id: canonicalOrderId,
         date_add: orderTimestamp,
-        external_order_id: shopifyOrderId,
+        external_order_id: canonicalOrderId,
         order_status_name: "Shopify Order",
       },
       products,

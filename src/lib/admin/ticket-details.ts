@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db";
 import { getTrackingStatusesForTicket } from "@/lib/admin/shipment-tracking";
 import { lookupCatalogProductBySku } from "@/lib/portal/product-warranty";
 import { compactSku } from "@/lib/portal/sku-normalize";
-import { shopifyOrderIdVariants } from "@/lib/portal/verify-order";
+import {
+  padUniqueIds,
+  shopifyOrderIdVariants,
+} from "@/lib/portal/verify-order";
 import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
 
 export type TicketDetail = {
@@ -266,6 +269,10 @@ export async function getPreviousClaimsForOrder(
   const orderKey = String(baselinkerOrderId ?? "").trim();
   if (!orderKey || !currentTicketId) return [];
 
+  const [v1, v2, v3, v4, v5] = /CK/i.test(orderKey)
+    ? padUniqueIds(shopifyOrderIdVariants(orderKey), 5)
+    : [orderKey, orderKey, orderKey, orderKey, orderKey];
+
   try {
     const rows = await prisma.$queryRaw<PreviousClaim[]>`
       SELECT
@@ -279,7 +286,7 @@ export async function getPreviousClaimsForOrder(
       JOIN orders o ON wt.order_id = o.order_id
       LEFT JOIN ticket_types tt ON wt.ticket_type_id = tt.ticket_type_id
       LEFT JOIN ticket_statuses ts ON wt.status_id = ts.status_id
-      WHERE o.baselinker_order_id = ${orderKey}
+      WHERE o.baselinker_order_id IN (${v1}, ${v2}, ${v3}, ${v4}, ${v5})
         AND wt.ticket_id != ${currentTicketId}
       ORDER BY wt.created_at DESC
     `;

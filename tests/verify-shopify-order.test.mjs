@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { shopifyOrderIdVariants, verifyOrder } from "@/lib/portal/verify-order";
+import {
+  canonicalShopifyOrderId,
+  shopifyClaimNumberVariants,
+  shopifyOrderIdVariants,
+  verifyOrder,
+} from "@/lib/portal/verify-order";
 import { resetDb, setQueryRaw, setExecuteRaw } from "@/lib/db";
 import { resetExternal, setExternalQuery } from "@/lib/db-external-shipway";
 import { installFetchStub, jsonResponse, setEnv } from "./helpers.mjs";
@@ -58,6 +63,23 @@ test("shopify order id variants include hashed, CK, and digits", () => {
   assert.ok(ids.includes("320114"));
 });
 
+test("canonical Shopify order id always uses #CK", () => {
+  assert.equal(canonicalShopifyOrderId("CK315791"), "#CK315791");
+  assert.equal(canonicalShopifyOrderId("#CK315791"), "#CK315791");
+  assert.equal(canonicalShopifyOrderId("315791"), "#CK315791");
+  assert.equal(canonicalShopifyOrderId("CK315791-R"), "#CK315791");
+  assert.equal(canonicalShopifyOrderId("#CK315791-02R"), "#CK315791");
+});
+
+test("hash and no-hash claim numbers share the same family", () => {
+  const hashed = shopifyClaimNumberVariants("#CK315791");
+  const bare = shopifyClaimNumberVariants("CK315791");
+  assert.ok(hashed.includes("#CK315791-R"));
+  assert.ok(hashed.includes("CK315791-R"));
+  assert.ok(bare.includes("#CK315791-R"));
+  assert.ok(bare.includes("CK315791-R"));
+});
+
 test("website verify imports from Shopify Admin when shopify_orders is empty", async () => {
   let inserted = false;
   const itemRows = [
@@ -111,6 +133,41 @@ test("website verify imports from Shopify Admin when shopify_orders is empty", a
   assert.equal(result.order.order_id, "#CK320114");
   assert.ok(result.products.length >= 1);
   assert.ok(net.calls.some((call) => String(call.url).includes("myshopify.com")));
+});
+
+test("website verify stores #CK even when the customer typed no hash", async () => {
+  const itemRows = [
+    {
+      shopify_order_id: "#CK320114",
+      order_date: new Date("2026-10-19T08:08:00Z"),
+      product_id: 0,
+      variant_id: 0,
+      sku: "AC-Sparkly-DE-C-TypeC-4.4",
+      qty: 1,
+      customer_name: "Radhe Baidya",
+      phone_number: "+918177894885",
+      email: "radhe81789@gmail.com",
+      customer_address: "Concept Kart 2nd Floor",
+      city: "New Delhi",
+      state: "Delhi",
+      pincode: "110028",
+      order_ean: "8900001",
+      v_warranty: null,
+      p_warranty: 12,
+    },
+  ];
+
+  setQueryRaw(async (sql) => {
+    if (sql.includes("FROM shopify_orders") && sql.includes("SELECT so.shopify_order_id")) {
+      return itemRows;
+    }
+    return [];
+  });
+
+  const result = await verifyOrder("CK320114", "website");
+  assert.equal(result.success, true);
+  assert.equal(result.order.order_id, "#CK320114");
+  assert.equal(result.order.external_order_id, "#CK320114");
 });
 
 test("website verify still says not found when Shopify Admin also misses", async () => {

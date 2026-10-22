@@ -10,6 +10,12 @@ import {
   generateTicketNumber,
   indianMobileDigits,
 } from "@/lib/tickets/ticket-number";
+import {
+  canonicalShopifyOrderId,
+  padUniqueIds,
+  shopifyClaimNumberVariants,
+  shopifyOrderIdVariants,
+} from "@/lib/portal/verify-order";
 
 export type ClaimInput = {
   customerEmail: string;
@@ -376,25 +382,101 @@ type SeqResult =
       days_remaining: number;
     };
 
-async function resolveSequentialOrderNumber(
+type ExistingClaimRow = {
+  ticket_number: string;
+  created_at: Date;
+  status_name: string | null;
+  order_number: string | null;
+};
+
+async function findExistingShopifyClaims(
+  baseOrderId: string,
+): Promise<ExistingClaimRow[]> {
+  const variants = padUniqueIds(shopifyOrderIdVariants(baseOrderId), 5);
+  const [v1, v2, v3, v4, v5] = variants;
+  const claimNumbers = padUniqueIds(shopifyClaimNumberVariants(baseOrderId), 10);
+  const [n1, n2, n3, n4, n5, n6, n7, n8, n9, n10] = claimNumbers;
+  const patterns = padUniqueIds(
+    variants.map((variant) => `${variant}-%`),
+    5,
+  );
+  const [p1, p2, p3, p4, p5] = patterns;
+
+  return prisma.$queryRaw<ExistingClaimRow[]>`
+    SELECT wt.ticket_number, wt.created_at, ts.status_name, o.order_number
+    FROM orders o
+    JOIN warranty_tickets wt ON wt.order_id = o.order_id
+    LEFT JOIN ticket_statuses ts ON ts.status_id = wt.status_id
+    WHERE o.source_platform = 'shopify'
+      AND (
+        o.baselinker_order_id IN (${v1}, ${v2}, ${v3}, ${v4}, ${v5})
+        OR o.order_number IN (${n1}, ${n2}, ${n3}, ${n4}, ${n5}, ${n6}, ${n7}, ${n8}, ${n9}, ${n10})
+        OR wt.claim_number IN (${n1}, ${n2}, ${n3}, ${n4}, ${n5}, ${n6}, ${n7}, ${n8}, ${n9}, ${n10})
+        OR o.order_number LIKE ${p1}
+        OR o.order_number LIKE ${p2}
+        OR o.order_number LIKE ${p3}
+        OR o.order_number LIKE ${p4}
+        OR o.order_number LIKE ${p5}
+        OR wt.claim_number LIKE ${p1}
+        OR wt.claim_number LIKE ${p2}
+        OR wt.claim_number LIKE ${p3}
+        OR wt.claim_number LIKE ${p4}
+        OR wt.claim_number LIKE ${p5}
+      )
+    ORDER BY wt.created_at DESC
+  `;
+}
+
+async function findExistingOrderByBase(
+  baseOrderId: string,
+  sourcePlatform: "amazon" | "shopify",
+) {
+  if (sourcePlatform === "shopify") {
+    const [v1, v2, v3, v4, v5] = padUniqueIds(
+      shopifyOrderIdVariants(baseOrderId),
+      5,
+    );
+    const rows = await prisma.$queryRaw<
+      Array<{ order_id: number; customer_id: number }>
+    >`
+      SELECT order_id, customer_id FROM orders
+      WHERE source_platform = ${sourcePlatform}
+        AND baselinker_order_id IN (${v1}, ${v2}, ${v3}, ${v4}, ${v5})
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{ order_id: number; customer_id: number }>
+  >`
+    SELECT order_id, customer_id FROM orders
+    WHERE baselinker_order_id = ${baseOrderId}
+      AND source_platform = ${sourcePlatform}
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+export async function resolveSequentialOrderNumber(
   baseOrderId: string,
   typeChar: "W" | "R",
   platform: "amazon" | "shopify",
 ): Promise<SeqResult> {
+  const normalizedBase =
+    platform === "shopify"
+      ? canonicalShopifyOrderId(baseOrderId)
+      : baseOrderId;
   const firstW =
-    platform === "amazon" ? `${baseOrderId}W` : `${baseOrderId}-W`;
+    platform === "amazon" ? `${normalizedBase}W` : `${normalizedBase}-W`;
   const firstR =
-    platform === "amazon" ? `${baseOrderId}R` : `${baseOrderId}-R`;
-  const pattern = `${baseOrderId}-%`;
+    platform === "amazon" ? `${normalizedBase}R` : `${normalizedBase}-R`;
+  const pattern = `${normalizedBase}-%`;
 
-  const existingClaims = await prisma.$queryRaw<
-    Array<{
-      ticket_number: string;
-      created_at: Date;
-      status_name: string | null;
-      order_number: string | null;
-    }>
-  >`
+  const existingClaims =
+    platform === "shopify"
+      ? await findExistingShopifyClaims(normalizedBase)
+      : await prisma.$queryRaw<ExistingClaimRow[]>`
     SELECT wt.ticket_number, wt.created_at, ts.status_name, o.order_number
     FROM orders o
     JOIN warranty_tickets wt ON wt.order_id = o.order_id
@@ -411,7 +493,7 @@ async function resolveSequentialOrderNumber(
     const suffix = platform === "amazon" ? typeChar : `-${typeChar}`;
     return {
       blocked: false,
-      order_number: `${baseOrderId}${suffix}`,
+      order_number: `${normalizedBase}${suffix}`,
       is_first: true,
     };
   }
@@ -436,7 +518,7 @@ async function resolveSequentialOrderNumber(
   const seqPadded = String(seq).padStart(2, "0");
   return {
     blocked: false,
-    order_number: `${baseOrderId}-${seqPadded}${typeChar}`,
+    order_number: `${normalizedBase}-${seqPadded}${typeChar}`,
     is_first: false,
   };
 }
@@ -627,7 +709,11 @@ export async function submitPortalClaim(
     orderData.claim_type === "replacement" ? "replacement" : "warranty";
   const typeChar: "W" | "R" = claimType === "replacement" ? "R" : "W";
 
-  const baseOrderId = String(orderData.order.order_id);
+  const typedOrderId = String(orderData.order.order_id);
+  const baseOrderId =
+    sourcePlatform === "shopify"
+      ? canonicalShopifyOrderId(typedOrderId)
+      : typedOrderId;
   const selectedProduct = resolveSelectedProduct(orderData, session);
   if (!selectedProduct) {
     return { success: false, error: "Selected product not found" };
@@ -704,16 +790,12 @@ export async function submitPortalClaim(
     orderId = byNumber[0]?.order_id ?? null;
 
     if (!orderId) {
-      const byBase = await prisma.$queryRaw<
-        Array<{ order_id: number; customer_id: number }>
-      >`
-        SELECT order_id, customer_id FROM orders
-        WHERE baselinker_order_id = ${baseOrderId}
-          AND source_platform = ${sourcePlatform}
-        LIMIT 1
-      `;
-      if (byBase[0]) {
-        orderId = byBase[0].order_id;
+      const byBase = await findExistingOrderByBase(
+        baseOrderId,
+        sourcePlatform,
+      );
+      if (byBase) {
+        orderId = byBase.order_id;
         if (seqResult.is_first) {
           await prisma.$executeRaw`
             UPDATE orders SET
@@ -723,7 +805,7 @@ export async function submitPortalClaim(
             WHERE order_id = ${orderId}
           `;
         } else {
-          const linkedCustomerId = byBase[0].customer_id;
+          const linkedCustomerId = byBase.customer_id;
           if (linkedCustomerId && linkedCustomerId !== customerId) {
             await prisma.$executeRaw`
               UPDATE customers SET
