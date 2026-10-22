@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseCustomerAddress } from "@/lib/admin/ticket-details";
+import {
+  matchIndianState,
+  parseCustomerAddress,
+} from "@/lib/admin/parse-customer-address";
 import {
   indianMobileDigits,
   swapOrderTypeSuffix,
@@ -38,4 +41,15 @@ test("parseCustomerAddress finds a 6-digit pincode in Amazon address blobs", () 
   assert.equal(parsed.pincode, "560092");
   assert.equal(parsed.city, "Bengaluru");
   assert.equal(parsed.state, "Karnataka");
+});
+
+test("Assign AWB autofill maps parsed state onto the Indian state select", () => {
+  const parsed = parseCustomerAddress(
+    "Concept Kart 2nd Floor, New Delhi, Delhi, 110028",
+  );
+  assert.equal(parsed.city, "New Delhi");
+  assert.equal(parsed.pincode, "110028");
+  assert.equal(matchIndianState(parsed.state), "Delhi");
+  assert.equal(matchIndianState("karnataka"), "Karnataka");
+  assert.equal(matchIndianState("unknown region"), "");
 });

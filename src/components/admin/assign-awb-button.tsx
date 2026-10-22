@@ -2,38 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const INDIAN_STATES = [
-  "Andhra Pradesh",
-  "Arunachal Pradesh",
-  "Assam",
-  "Bihar",
-  "Chhattisgarh",
-  "Delhi",
-  "Goa",
-  "Gujarat",
-  "Haryana",
-  "Himachal Pradesh",
-  "Jharkhand",
-  "Karnataka",
-  "Kerala",
-  "Madhya Pradesh",
-  "Maharashtra",
-  "Manipur",
-  "Meghalaya",
-  "Mizoram",
-  "Nagaland",
-  "Odisha",
-  "Punjab",
-  "Rajasthan",
-  "Sikkim",
-  "Tamil Nadu",
-  "Telangana",
-  "Tripura",
-  "Uttar Pradesh",
-  "Uttarakhand",
-  "West Bengal",
-];
+import {
+  INDIAN_STATES,
+  matchIndianState,
+  parseCustomerAddress,
+} from "@/lib/admin/parse-customer-address";
 
 type Mode = "return" | "forward" | "manual";
 
@@ -88,6 +61,14 @@ export function AssignAwbButton({
     if (mode === "forward") return "Create Forward Shipment";
     return "Assign AWB";
   }, [loading, mode]);
+
+  function applyParsedAddress(raw: string) {
+    const parsed = parseCustomerAddress(raw);
+    setAddress(parsed.address || raw.trim());
+    setCity(parsed.city);
+    setState(matchIndianState(parsed.state));
+    setZipcode((parsed.pincode || "").replace(/\D/g, "").slice(0, 6));
+  }
 
   function resetFormFields() {
     setAwb("");
@@ -194,7 +175,7 @@ export function AssignAwbButton({
         className="btn btn-sm btn-primary"
         onClick={() => {
           resetFormFields();
-          setAddress(defaultAddress);
+          applyParsedAddress(defaultAddress);
           setOpen(true);
         }}
       >

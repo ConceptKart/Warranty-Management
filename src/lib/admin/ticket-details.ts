@@ -8,6 +8,9 @@ import {
   shopifyOrderIdVariants,
 } from "@/lib/portal/verify-order";
 import { fetchShopifyAdminOrder } from "@/lib/shopify/admin-client";
+import { parseCustomerAddress } from "@/lib/admin/parse-customer-address";
+
+export { parseCustomerAddress } from "@/lib/admin/parse-customer-address";
 
 export type TicketDetail = {
   ticket_id: number;
@@ -560,40 +563,6 @@ export async function getTicketDataForShipment(
   }
 
   return result;
-}
-
-export function parseCustomerAddress(rawAddress: string) {
-  const parts = rawAddress
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  let pincode = "";
-  let state = "";
-  let city = "";
-  let address = rawAddress.trim();
-
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const standalone = parts[i]!;
-    const embedded = standalone.match(/\b(\d{6})\b/);
-    if (/^\d{6}$/.test(standalone) || embedded) {
-      pincode = /^\d{6}$/.test(standalone) ? standalone : embedded![1]!;
-      state = parts[i - 1] ?? "";
-      city = parts[i - 2] ?? "";
-      address = parts.slice(0, Math.max(0, i - 2)).join(", ");
-      break;
-    }
-  }
-
-  if (!/^\d{6}$/.test(pincode) && parts.length >= 3) {
-    const last = parts[parts.length - 1]!;
-    const embedded = last.match(/\b(\d{6})\b/);
-    pincode = embedded?.[1] ?? last;
-    state = parts[parts.length - 2]!;
-    city = parts[parts.length - 3]!;
-    address = parts.slice(0, parts.length - 3).join(", ");
-  }
-
-  return { address, city, state, pincode };
 }
 
 /**
