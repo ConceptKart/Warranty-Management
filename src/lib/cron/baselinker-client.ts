@@ -82,6 +82,65 @@ export async function baselinkerCall(
   }
 }
 
+export const SHIPMENT_CRON_MODES = [
+  "changed",
+  "active",
+  "full",
+  "test",
+  "stats",
+] as const;
+
+export type ShipmentCronMode = (typeof SHIPMENT_CRON_MODES)[number];
+
+export function parseCronDate(
+  raw: string | null | undefined,
+): { ok: true; date?: string } | { ok: false; error: string } {
+  const ymd = raw?.trim();
+  if (!ymd) return { ok: true };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    return { ok: false, error: "Invalid date format. Use YYYY-MM-DD." };
+  }
+  const [year, month, day] = ymd.split("-").map(Number);
+  const utc = Date.UTC(year, month - 1, day);
+  const check = new Date(utc);
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return { ok: false, error: "Invalid date. Use a real YYYY-MM-DD calendar day." };
+  }
+  return { ok: true, date: ymd };
+}
+
+export function parseCronDryRun(raw: string | null | undefined) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+export function parseCronLimit(
+  raw: string | null | undefined,
+  fallback = 200,
+  max = 1000,
+) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(1, Math.floor(n)));
+}
+
+export function parseShipmentCronMode(
+  raw: string | null | undefined,
+): { ok: true; mode: ShipmentCronMode } | { ok: false; error: string } {
+  const mode = String(raw ?? "changed").trim().toLowerCase() || "changed";
+  if ((SHIPMENT_CRON_MODES as readonly string[]).includes(mode)) {
+    return { ok: true, mode: mode as ShipmentCronMode };
+  }
+  return {
+    ok: false,
+    error: `Invalid mode. Use ${SHIPMENT_CRON_MODES.join("|")}.`,
+  };
+}
+
 /** IST day window as unix seconds (matches PHP cron date handling). */
 export function getIstDayWindow(dateYmd?: string | null): {
   dayStart: number;
@@ -89,6 +148,9 @@ export function getIstDayWindow(dateYmd?: string | null): {
   istStart: string;
   istEnd: string;
 } {
+  const parsed = parseCronDate(dateYmd);
+  if (!parsed.ok) throw new Error(parsed.error);
+
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
     year: "numeric",
@@ -96,7 +158,7 @@ export function getIstDayWindow(dateYmd?: string | null): {
     day: "2-digit",
   });
 
-  let ymd = dateYmd?.trim();
+  let ymd = parsed.date;
   if (!ymd) {
     // yesterday in IST
     const now = new Date();
@@ -105,10 +167,6 @@ export function getIstDayWindow(dateYmd?: string | null): {
     );
     istNow.setDate(istNow.getDate() - 1);
     ymd = formatter.format(istNow); // YYYY-MM-DD
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
-    throw new Error("Invalid date format. Use YYYY-MM-DD.");
   }
 
   // Start of that IST day as unix
@@ -156,8 +214,9 @@ export async function fetchOrdersForDay(input: {
     if (orders.length === 0) break;
 
     const newOrders = orders.filter((o) => {
-      const id = String(o.order_id ?? "");
-      if (!id || seen.has(id)) return false;
+      const id = String(o.order_id ?? "").trim();
+      if (!id || id === "0") return false;
+      if (seen.has(id)) return false;
       seen.add(id);
       return true;
     });

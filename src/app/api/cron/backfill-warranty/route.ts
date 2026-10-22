@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { authorizeCron } from "@/lib/cron/baselinker-client";
+import {
+  authorizeCron,
+  parseCronDryRun,
+  parseCronLimit,
+} from "@/lib/cron/baselinker-client";
 import { backfillProductWarranties } from "@/lib/cron/backfill-warranty";
 
 export const runtime = "nodejs";
@@ -16,14 +20,12 @@ async function handle(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const limitRaw = Number(searchParams.get("limit") ?? "200");
-  const dryRun =
-    searchParams.get("dry_run") === "1" ||
-    searchParams.get("dry_run") === "true";
+  const limit = parseCronLimit(searchParams.get("limit"), 200, 1000);
+  const dryRun = parseCronDryRun(searchParams.get("dry_run"));
 
   try {
     const results = await backfillProductWarranties({
-      limit: Number.isFinite(limitRaw) ? limitRaw : 200,
+      limit,
       dryRun,
     });
     return NextResponse.json({

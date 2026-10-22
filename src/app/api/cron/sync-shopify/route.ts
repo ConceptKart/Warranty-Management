@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { authorizeCron } from "@/lib/cron/baselinker-client";
+import {
+  authorizeCron,
+  parseCronDate,
+  parseCronDryRun,
+} from "@/lib/cron/baselinker-client";
 import { syncShopifyOrders } from "@/lib/cron/shopify-sync";
 
 export const runtime = "nodejs";
@@ -16,13 +20,14 @@ async function handle(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const date = searchParams.get("date");
-  const dryRun =
-    searchParams.get("dry_run") === "1" ||
-    searchParams.get("dry_run") === "true";
+  const date = parseCronDate(searchParams.get("date"));
+  if (!date.ok) {
+    return NextResponse.json({ success: false, error: date.error }, { status: 400 });
+  }
+  const dryRun = parseCronDryRun(searchParams.get("dry_run"));
 
   try {
-    const results = await syncShopifyOrders({ date, dryRun });
+    const results = await syncShopifyOrders({ date: date.date, dryRun });
     return NextResponse.json({
       success: results.rows_errored === 0,
       results,

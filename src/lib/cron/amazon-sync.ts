@@ -26,7 +26,7 @@ type AmazonRow = {
 
 function expandOrderToRows(order: BaselinkerOrder): AmazonRow[] {
   const products = order.products ?? [];
-  const baseOrderId = String(order.order_id ?? "");
+  const baseOrderId = String(order.order_id ?? "").trim();
   const amazonOrderId = String(
     order.extra_field_1 || order.external_order_id || "",
   );
@@ -103,7 +103,14 @@ export async function syncAmazonOrders(input: {
     ordersMatched += orders.length;
 
     for (const order of orders) {
-      const rows = expandOrderToRows(order);
+      const rows = expandOrderToRows(order).filter((row) =>
+        Boolean(row.base_linker_order_id),
+      );
+      if (rows.length === 0) {
+        rowsErrored++;
+        errors.push(`source=${sourceId}: skipped order with empty base_linker_order_id`);
+        continue;
+      }
       for (const row of rows) {
         if (dryRun) {
           rowsUpserted++;

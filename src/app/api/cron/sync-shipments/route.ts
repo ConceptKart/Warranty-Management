@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  authorizeCron,
+  parseCronLimit,
+  parseShipmentCronMode,
+} from "@/lib/cron/baselinker-client";
+import {
   getCronSyncStats,
   syncActiveShipments,
   syncAllChanged,
@@ -10,20 +15,6 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function authorize(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return { ok: true as const, warn: "CRON_SECRET not set" };
-  }
-  const header =
-    request.headers.get("x-cron-secret") ||
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (header !== secret) {
-    return { ok: false as const };
-  }
-  return { ok: true as const };
-}
-
 /**
  * HTTP port of cron/sync_shipments.php
  * Modes: ?mode=changed|active|full|test|stats
@@ -32,17 +23,21 @@ function authorize(request: Request) {
  * Protect with header: x-cron-secret: $CRON_SECRET
  */
 export async function GET(request: Request) {
-  const auth = authorize(request);
+  const auth = authorizeCron(request);
   if (!auth.ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
-  const mode = (searchParams.get("mode") || "changed").toLowerCase();
-  const limit = Math.min(
-    200,
-    Math.max(1, Number(searchParams.get("limit") || "50")),
-  );
+  const parsedMode = parseShipmentCronMode(searchParams.get("mode"));
+  if (!parsedMode.ok) {
+    return NextResponse.json(
+      { success: false, error: parsedMode.error },
+      { status: 400 },
+    );
+  }
+  const mode = parsedMode.mode;
+  const limit = parseCronLimit(searchParams.get("limit"), 50, 200);
 
   try {
     if (mode === "test") {

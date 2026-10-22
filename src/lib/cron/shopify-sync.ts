@@ -32,7 +32,7 @@ type ShopifyRow = {
 
 function expandOrderToRows(order: BaselinkerOrder): ShopifyRow[] {
   const products = order.products ?? [];
-  const baseOrderId = String(order.order_id ?? "");
+  const baseOrderId = String(order.order_id ?? "").trim();
   const orderDate = formatIstFromUnix(Number(order.date_add ?? Date.now() / 1000));
   const shopifyId = order.external_order_id
     ? `#CK${order.external_order_id}`
@@ -153,7 +153,14 @@ export async function syncShopifyOrders(input: {
   const errors: string[] = [];
 
   for (const order of orders) {
-    const rows = expandOrderToRows(order);
+    const rows = expandOrderToRows(order).filter((row) =>
+      Boolean(row.base_order_id),
+    );
+    if (rows.length === 0) {
+      rowsErrored++;
+      errors.push("skipped order with empty base_order_id");
+      continue;
+    }
     for (const row of rows) {
       if (dryRun) {
         rowsUpserted++;
